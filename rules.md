@@ -287,14 +287,15 @@ SIRKET_PROJE_CONFIG = {
 
 ### Filtre UI (Not ve Görev tab'larında)
 
+Kompakt popover filtre:
 ```
-🔽 Filtre: [Tümü ▼]
-├── Tümü
-├── Projesi Yok
-├── ENVEX - Proje 1
-├── ENVEX - Proje 2
-└── ...
+[🔽 Tümü]  ← Küçük buton, tıklayınca popover açılır
 ```
+
+- Kapalıyken sadece küçük buton
+- Tıklayınca overlay ile radio seçenekleri
+- Proje adı max 15 karakter kısaltılır
+- Seçenekler: Tümü, Projesi Yok, SIRKET - Proje (38 proje)
 
 ## Session State
 
