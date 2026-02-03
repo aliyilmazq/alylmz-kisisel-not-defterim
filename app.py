@@ -183,8 +183,9 @@ def parse_body(body: str, fallback_title: str = "") -> tuple[str, str]:
     return title, content
 
 
+@st.cache_data(ttl=30)
 def get_items(folder_type: str) -> list[dict]:
-    """Google Drive'dan dosyaları çek - Shared Drive desteği"""
+    """Google Drive'dan dosyaları çek - Shared Drive desteği + 30sn cache"""
     service = get_drive_service()
     folder_ids = get_folder_ids()
 
