@@ -6,6 +6,7 @@ import json
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, FileResponse
+from fastapi.middleware.gzip import GZipMiddleware
 from pydantic import BaseModel
 from typing import Optional
 
@@ -17,6 +18,9 @@ from services.drive import (
 )
 
 app = FastAPI(title="Kişisel Not Defterim API")
+
+# Gzip sıkıştırma (500 byte üzeri yanıtlar için)
+app.add_middleware(GZipMiddleware, minimum_size=500)
 
 # Static files
 app.mount("/static", StaticFiles(directory="static"), name="static")

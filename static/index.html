@@ -39,6 +39,16 @@
             -webkit-box-orient: vertical;
             overflow: hidden;
         }
+        /* Skeleton loading animation */
+        .skeleton {
+            background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+            background-size: 200% 100%;
+            animation: skeleton-loading 1.5s infinite;
+        }
+        @keyframes skeleton-loading {
+            0% { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+        }
     </style>
 </head>
 <body class="bg-gray-50 min-h-screen" x-data="app()" x-init="init()">
@@ -159,8 +169,29 @@
             </div>
         </div>
 
-        <!-- Loading -->
-        <div x-show="loading" class="px-4 py-8 text-center text-gray-500">Yükleniyor...</div>
+        <!-- Skeleton Loading -->
+        <div x-show="loading" class="px-4 space-y-3">
+            <template x-for="i in 3" :key="i">
+                <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                    <div class="px-4 py-3 border-b border-gray-100">
+                        <div class="skeleton h-5 w-3/4 rounded mb-2"></div>
+                        <div class="skeleton h-3 w-1/2 rounded"></div>
+                    </div>
+                    <div class="px-4 py-2">
+                        <div class="skeleton h-4 w-full rounded mb-1"></div>
+                        <div class="skeleton h-4 w-2/3 rounded"></div>
+                    </div>
+                    <div class="px-2 py-2 bg-gray-50">
+                        <div class="grid grid-cols-4 gap-1">
+                            <div class="skeleton h-8 rounded"></div>
+                            <div class="skeleton h-8 rounded"></div>
+                            <div class="skeleton h-8 rounded"></div>
+                            <div class="skeleton h-8 rounded"></div>
+                        </div>
+                    </div>
+                </div>
+            </template>
+        </div>
 
         <!-- Items (Config-driven Cards) -->
         <div x-show="!loading" class="px-4 space-y-3">
@@ -450,6 +481,21 @@
                 // ============ DATA LOADING ============
                 async loadInitialData() {
                     await Promise.all([this.loadCounts(), this.loadItems(), this.loadCompanies(), this.loadConfig()]);
+                    // Arka planda diğer tab'ları prefetch et
+                    this.prefetchTabs();
+                },
+
+                prefetchTabs() {
+                    // Aktif tab dışındaki tab'ları arka planda yükle
+                    const otherTabs = ['inbox', 'notlar', 'gorevler'].filter(t => t !== this.activeTab);
+                    otherTabs.forEach(tab => {
+                        const cacheKey = `items_${tab}_Tümü`;
+                        if (!this.getCached(cacheKey)) {
+                            this.api('GET', `/api/items/${tab}?filter=T%C3%BCm%C3%BC`)
+                                .then(items => this.setCached(cacheKey, items))
+                                .catch(() => {});
+                        }
+                    });
                 },
 
                 async loadCounts() {
