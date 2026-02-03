@@ -612,22 +612,23 @@ CSS_STYLES = """
     .stCaption { color: #8e8e93 !important; font-size: 0.7rem !important; }
     ::-webkit-scrollbar { width: 0px; height: 0px; }
 
-    /* Columns - yan yana zorla, wrap engelle */
+    /* Columns - yan yana zorla */
     [data-testid="column"] {
-        padding: 0 0.15rem !important;
+        padding: 0 0.1rem !important;
         min-width: 0 !important;
+        overflow: hidden !important;
     }
     [data-testid="stHorizontalBlock"] {
         flex-wrap: nowrap !important;
-        gap: 0.25rem !important;
+        gap: 0.2rem !important;
         align-items: center !important;
     }
 
     /* Kompakt butonlar */
-    [data-testid="stHorizontalBlock"] .stButton > button {
-        padding: 0.4rem 0.6rem !important;
-        min-width: auto !important;
-        white-space: nowrap !important;
+    .stButton > button {
+        padding: 0.35rem 0.5rem !important;
+        min-width: 36px !important;
+        font-size: 0.85rem !important;
     }
 
     /* Desktop */
@@ -687,17 +688,19 @@ archive_count = get_item_count("arsiv")
 trash_count = get_item_count("cop_kutusu")
 
 # Başlık ve butonlar
-col1, col2, col3 = st.columns([3, 2, 1])
+col1, col2 = st.columns([3, 1])
 with col1:
     st.image("logo.webp", width=100)
 with col2:
-    if st.button("＋ Yeni", use_container_width=True, type="primary"):
-        st.session_state.edit_mode = True
-        st.session_state.selected_item = None
-        st.rerun()
-with col3:
-    if st.button("🔄"):
-        st.cache_data.clear()
+    btn_cols = st.columns(2)
+    with btn_cols[0]:
+        if st.button("＋", type="primary"):
+            st.session_state.edit_mode = True
+            st.session_state.selected_item = None
+            st.rerun()
+    with btn_cols[1]:
+        if st.button("🔄"):
+            st.cache_data.clear()
         st.rerun()
 
 # Düzenleme modu
