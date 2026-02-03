@@ -2,24 +2,240 @@
 
 ## Proje Yapısı
 
-**GitHub (Uygulama):**
+**GitHub Repository:**
 ```
 alylmz-kisisel-not-defterim/
 ├── app.py                  # Streamlit uygulaması
+├── logo.webp               # BEIREK logosu
 ├── requirements.txt        # Bağımlılıklar
 ├── rules.md                # Bu dosya
 ├── sirketler_projeler.md   # Şirket & Proje indeksi
-└── not-defterim.command    # Tıkla-çalıştır dosyası
+└── .streamlit/
+    └── secrets.toml        # Gizli anahtarlar (git'e dahil değil)
 ```
 
-**iCloud & Google Drive (Veri):**
+**Google Workspace Shared Drive (Veri):**
 ```
-alylmz-kisisel-not-defterim/
-├── inbox/                  # 📥 Gelen kutusu
-├── notlar/                 # 📝 Notlar
-├── gorevler/               # ✅ Görevler
-├── arsiv/                  # 📦 Arşiv (tamamlanan görevler)
-└── cop_kutusu/             # 🗑️ Çöp kutusu (silinen öğeler)
+aliyilmaz-kisisel-not-defterim/    # Shared Drive ID: 0AFbVhvJLQtOHUk9PVA
+├── inbox/                          # 📥 Gelen kutusu
+├── notlar/                         # 📝 Notlar
+├── gorevler/                       # ✅ Görevler
+├── arsiv/                          # 📦 Arşiv (tamamlanan görevler)
+└── cop_kutusu/                     # 🗑️ Çöp kutusu (silinen öğeler)
+```
+
+## Mimari
+
+### Google Drive API (Single Source of Truth)
+
+Uygulama Google Drive API v3 kullanır. Tüm veri işlemleri Google Workspace Shared Drive üzerinden yapılır.
+
+**Neden Shared Drive?**
+- Service Account'lar normal Drive'da storage quota'ya sahip değil
+- Workspace Shared Drive bu kısıtlamayı aşar
+- info@beirek.com Workspace hesabı üzerinden
+
+**Service Account:**
+```
+notlarim-drive@aliyilmaz-kisisel-not-defterim.iam.gserviceaccount.com
+```
+
+**API Konfigürasyonu:**
+```python
+SCOPES = ['https://www.googleapis.com/auth/drive']
+SHARED_DRIVE_ID = "0AFbVhvJLQtOHUk9PVA"
+
+# Tüm API çağrılarında gerekli parametreler:
+supportsAllDrives=True
+includeItemsFromAllDrives=True
+```
+
+### SSL Sorunu Çözümü
+
+Python httplib2 ile SSL hatası oluşuyordu. Çözüm: Custom HTTP adapter ile requests kullanımı.
+
+```python
+from google.auth.transport.requests import AuthorizedSession
+
+class RequestsHttpAdapter:
+    def __init__(self, session):
+        self.session = session
+
+    def request(self, uri, method='GET', body=None, headers=None, **kwargs):
+        response = self.session.request(method, uri, data=body, headers=headers)
+        return type('Response', (), {
+            'status': response.status_code,
+            'reason': response.reason
+        })(), response.content
+
+# Kullanım:
+authed_session = AuthorizedSession(credentials)
+service = build('drive', 'v3', http=RequestsHttpAdapter(authed_session))
+```
+
+## Deployment
+
+### Streamlit Cloud
+
+**URL:** https://aliyilmaznotdefterim.streamlit.app/
+
+**GitHub Repo:** https://github.com/aliyilmazq/alylmz-kisisel-not-defterim (public)
+
+**Secrets (Streamlit Cloud > Settings > Secrets):**
+```toml
+app_secret_key = "1102"
+
+[gcp_service_account]
+type = "service_account"
+project_id = "aliyilmaz-kisisel-not-defterim"
+private_key_id = "..."
+private_key = """
+-----BEGIN PRIVATE KEY-----
+...
+-----END PRIVATE KEY-----
+"""
+client_email = "notlarim-drive@aliyilmaz-kisisel-not-defterim.iam.gserviceaccount.com"
+# ... diğer alanlar
+```
+
+### Erişim Kontrolü
+
+İki yöntemli authentication:
+
+1. **URL Parametresi:** `?key=1102` - Tarayıcı bookmark için
+2. **Şifre Formu:** Ana ekrana eklendiğinde şifre gir, session boyunca hatırla
+
+```python
+SECRET_KEY = st.secrets.get("app_secret_key", "notlarim2024")
+
+if "authenticated" not in st.session_state:
+    st.session_state.authenticated = False
+
+# URL ile giriş
+if st.query_params.get("key") == SECRET_KEY:
+    st.session_state.authenticated = True
+
+# Şifre formu (URL parametresi yoksa)
+if not st.session_state.authenticated:
+    entered_key = st.text_input("Erişim anahtarı", type="password")
+    if st.button("Giriş"):
+        if entered_key == SECRET_KEY:
+            st.session_state.authenticated = True
+            st.rerun()
+```
+
+## Performans Optimizasyonları
+
+### Caching
+
+```python
+@st.cache_resource
+def get_drive_service():
+    """Drive service - uygulama başına bir kez"""
+
+@st.cache_data(ttl=60)
+def get_folder_ids():
+    """Klasör ID'leri - 60 saniye cache"""
+
+@st.cache_data(ttl=30)
+def get_items(folder_type: str):
+    """Dosya listesi ve içerikleri - 30 saniye cache"""
+
+@st.cache_data(ttl=30)
+def get_item_count(folder_type: str):
+    """Hızlı dosya sayısı (içerik okumadan) - 30 saniye cache"""
+```
+
+### Lazy Loading
+
+Tab sayıları için hızlı count API kullanılır, içerikler sadece ilgili tab görüntülendiğinde yüklenir:
+
+```python
+# Başlangıçta sadece sayılar
+inbox_count = get_item_count("inbox")
+notes_count = get_item_count("notlar")
+# ...
+
+# Tab içeriği görüntülendiğinde
+with tab1:
+    inbox = get_items("inbox")  # Şimdi yükle
+```
+
+## UI / UX
+
+### Header
+
+```
+[BEIREK Logo 112px]  [＋ Yeni] (mavi buton)
+```
+
+### Tab Menü
+
+```
+📥 Gelen (3) | 📝 Not (5) | ✅ Görev (2) | 📦 Arşiv (1) | 🗑️ Çöp (0)
+```
+
+| Tab | Açıklama |
+|-----|----------|
+| 📥 Gelen | Yeni girişler burada bekler |
+| 📝 Not | Kalıcı notlar |
+| ✅ Görev | Yapılacaklar |
+| 📦 Arşiv | Tamamlanan görevler |
+| 🗑️ Çöp | Silinen öğeler |
+
+### Kart Görünümü
+
+```
+▶ Başlık 📁 (proje varsa)
+  ─────────────────────────────
+  📁 Proje Adı (varsa)
+  Açıklama (max 2 satır)
+  ─────────────────────────────
+  [Aksiyon butonları - Segmented Control]
+```
+
+### Aksiyonlar
+
+- **Gelen Kutusu:** `📝Not | ✅Görev | ✏️Düzenle | 🗑️Sil`
+- **Notlar:** `📥Gelen | ✅Görev | 📁Proje | ✏️Düzenle | 🗑️Sil`
+- **Görevler:** `✅Tamamla | 📝Not | 📁Proje | 📥Gelen | ✏️Düzenle | 🗑️Sil`
+- **Arşiv:** `↩️Geri | 🗑️Sil`
+- **Çöp:** `↩️Geri | ×Sil`
+
+### iPhone 15 Optimizasyonları (CSS)
+
+- Safe area desteği (notch, home indicator)
+- Kompakt padding ve spacing
+- iOS segment control stili tab'lar
+- Touch-friendly minimum 32-44px yükseklik
+- Streamlit header/footer gizleme
+- Inter font ailesi
+
+```css
+/* Örnek optimizasyonlar */
+.main .block-container {
+    padding: 0.5rem 0.75rem 1rem 0.75rem !important;
+    padding-bottom: env(safe-area-inset-bottom, 1rem) !important;
+}
+
+[data-testid="stHeader"],
+[data-testid="stToolbar"],
+footer { display: none !important; }
+```
+
+## Dosya Formatı
+
+**Dosya adı:** `2026-02-02-baslik.md`
+
+```markdown
+---
+proje: "ENVEX - BHP Escondida Sözleşme Yönetimi"
+created: 2026-02-02
+---
+
+# Başlık
+
+İçerik buraya...
 ```
 
 ## Akış
@@ -37,265 +253,103 @@ Yeni Giriş → 📥 Gelen Kutusu → 📝 Not veya ✅ Görev
                                📦 Arşiv
 ```
 
-## Giriş Formatı
+## Şirket & Proje Yapısı
 
-Tek metin kutusu:
-- **İlk satır** → Başlık
-- **Geri kalan satırlar** → Açıklama/içerik
+**10 Şirket, 38 Proje**
 
-### Dosya Formatı (.md)
-
-**Dosya adı:** `2026-02-02-baslik.md` (tarih-baslik formatı)
-
-```markdown
----
-proje: "ENVEX - BHP Escondida Sözleşme Yönetimi"
-created: 2026-02-02
----
-
-# Başlık
-
-İçerik buraya...
+```python
+SIRKET_PROJE_CONFIG = {
+    "ENVEX": [12 proje],
+    "COREX": [3 proje],
+    "TIS": [7 proje],
+    "MIM": [1 proje],
+    "TEMROB": [2 proje],
+    "PULCHRANI": [2 proje],
+    "ALI YILMAZ": [7 proje],
+    "EPIOQN": [1 proje],
+    "PULPO": [2 proje],
+    "OZMEN": [1 proje],
+}
 ```
 
-- `proje`: `"SIRKET - Proje Adı"` formatında veya `null`
-- `created`: Oluşturulma tarihi (YYYY-MM-DD)
+> Detaylı liste için bkz: `sirketler_projeler.md`
 
-## Kart Görünümü
-
-Tüm tablarda aynı kart yapısı kullanılır:
+### Filtre UI (Not ve Görev tab'larında)
 
 ```
-▶ Başlık (ilk satır, CSS ile tek satır)
-  ─────────────────────────────
-  Açıklama (geri kalan satırlar, CSS ile max 3 satır)
-  ─────────────────────────────
-  [Aksiyon butonları]  ← Segmented control
+🔽 Filtre: [Tümü ▼]
+├── Tümü
+├── Projesi Yok
+├── ENVEX - Proje 1
+├── ENVEX - Proje 2
+└── ...
 ```
 
-**Aksiyonlar:**
-- **Gelen Kutusu:** `📝Not | ✅Görev | ✏️Düzenle | 🗑️Sil`
-- **Notlar:** `📥Gelen | ✅Görev | 📁Proje | ✏️Düzenle | 🗑️Sil`
-- **Görevler:** `✅Tamamla | 📝Not | 📁Proje | 📥Gelen | ✏️Düzenle | 🗑️Sil`
-- **Arşiv:** `↩️Geri | 🗑️Sil`
-- **Çöp:** `↩️Geri | ×Sil`
+## Session State
 
-- Segmented control her zaman yan yana kalır (responsive)
-
-## Üst Menü (Tabs)
-
-```
-📥 Gelen (3) | 📝 Not (5) | ✅ Görev (2) | 📦 Arşiv (1) | 🗑️ Çöp (0)
+```python
+st.session_state.authenticated = False    # Giriş durumu
+st.session_state.edit_mode = False        # Düzenleme modu
+st.session_state.selected_item = None     # Düzenlenen öğe
+st.session_state.proje_mode = False       # Proje seçim modu
+st.session_state.proje_item = None        # Proje atanacak öğe
+st.session_state.notlar_filter = "Tümü"   # Notlar tab filtresi
+st.session_state.gorevler_filter = "Tümü" # Görevler tab filtresi
 ```
 
-| Tab | Açıklama |
-|-----|----------|
-| 📥 Gelen | Yeni girişler burada bekler |
-| 📝 Not | Kalıcı notlar |
-| ✅ Görev | Yapılacaklar |
-| 📦 Arşiv | Tamamlanan görevler |
-| 🗑️ Çöp | Silinen öğeler |
+## Önemli Fonksiyonlar
 
-- Tab'larda sayaç gösterilir (örn: "📥 Gelen (3)")
-- Mobile-friendly: Yatay scroll ile erişilebilir
+```python
+# Drive Service
+get_drive_service() -> googleapiclient.discovery.Resource
 
-## Klasör Yapısı
+# Veri Çekme
+get_folder_ids() -> dict[str, str]
+get_item_count(folder_type: str) -> int
+get_items(folder_type: str) -> list[dict]
+get_items_filtered(folder_type: str, proje_filter: str) -> list[dict]
 
-**Uygulama (GitHub):**
-`/Users/alylmztr/Documents/GitHub/alylmz-kisisel-not-defterim/`
+# Dosya İşlemleri
+save_file(title, content, folder_type, proje=None, file_id=None)
+move_file(file_id, from_folder, to_folder)
+delete_file(file_id, folder_type)
+update_proje(file_id, folder_type, proje)
 
-**Veri (iCloud + Google Drive):**
+# Parsing
+parse_frontmatter(content: str) -> tuple[dict, str]
+create_frontmatter(proje: str = None) -> str
+parse_body(body: str, fallback_title: str) -> tuple[str, str]
+
+# UI Rendering
+render_card(item, folder, key_prefix)
+render_tab(items, folder, key_prefix)
+render_filter(folder_type, filter_state_key, select_key)
 ```
-iCloud (MAIN_FOLDER) ──sync──► Google Drive
+
+## Gereksinimler
+
+```
+streamlit>=1.28.0
+google-api-python-client>=2.100.0
+google-auth>=2.23.0
+google-auth-oauthlib>=1.1.0
 ```
 
-1. **iCloud:** `/Users/alylmztr/Library/Mobile Documents/com~apple~CloudDocs/alylmz-kisisel-not-defterim/`
-2. **Google Drive:** `/Users/alylmztr/Library/CloudStorage/GoogleDrive-831590@gmail.com/Drive'ım/alylmz-kisisel-not-defterim/`
+## Lokal Geliştirme
 
-> ⚠️ **KURAL:** iCloud ve Google Drive her zaman entegre çalışmalı. Tüm veri işlemleri her iki lokasyona da senkronize edilmeli.
-
-## Çalıştırma
-
-**Dock'tan:** `not-defterim.command` tıkla
-
-**Terminal:**
 ```bash
 cd /Users/alylmztr/Documents/GitHub/alylmz-kisisel-not-defterim
 streamlit run app.py --server.port 8510
 ```
 
-**URL:** http://localhost:8510
+**URL:** http://localhost:8510?key=1102
 
-## Tasarım
+## Git İşlemleri
 
-- Mobile-first iOS benzeri arayüz
-- Inter font
-- Touch-friendly (min 44px)
-- Segmented control (her zaman yan yana)
-- Satır bazlı sınırlama (responsive)
+```bash
+# Değişiklikleri geri al
+git reset --hard <commit_hash> && git push --force
 
-## Tek Yerden Yönetim
-
-### Klasör Değişkenleri
-```python
-APP_FOLDER = Path("/.../GitHub/alylmz-kisisel-not-defterim")  # Uygulama
-DATA_FOLDERS = [iCloud, Google Drive]  # Veri
-MAIN_FOLDER = DATA_FOLDERS[0]  # iCloud ana kaynak
+# Son commit'i geri al
+git revert HEAD --no-edit && git push
 ```
-
-### FOLDER_CONFIG - Alt Klasör Yönetimi
-```python
-FOLDER_CONFIG = {
-    "inbox": "inbox",
-    "notlar": "notlar",
-    "gorevler": "gorevler",
-    "arsiv": "arsiv",
-    "cop_kutusu": "cop_kutusu",
-}
-
-def get_folder_path(folder: Path, folder_type: str) -> Path:
-    return folder / FOLDER_CONFIG[folder_type]
-```
-
-### get_items() - Tek Veri Çekme
-```python
-def get_items(folder_type: str) -> list[dict]:
-    return get_items_from_folder(get_folder_path(MAIN_FOLDER, folder_type))
-```
-
-### CSS_STYLES - Stil Değişkeni
-```python
-CSS_STYLES = """<style>...</style>"""
-st.markdown(CSS_STYLES, unsafe_allow_html=True)
-```
-
-### TAB_CONFIG - Tab Yönetimi
-```python
-TAB_CONFIG = {
-    "folder_name": {
-        "options": [...],
-        "actions": {...},
-        "empty_msg": "..."
-    }
-}
-```
-
-## Şirket & Proje Yapısı
-
-> **Kaynak dosya:** `sirketler_projeler.md` - Şirket ve proje listesi burada tutulur.
-
-### Konfigürasyon
-```python
-# sirketler_projeler.md dosyasından okunur veya hardcoded:
-SIRKET_PROJE_CONFIG = {
-    "ENVEX": [...],      # 12 proje
-    "COREX": [...],      # 3 proje
-    "TIS": [...],        # 7 proje
-    "MIM": [...],        # 1 proje
-    "TEMROB": [...],     # 2 proje
-    "PULCHRANI": [...],  # 2 proje
-    "ALI YILMAZ": [...], # 7 proje
-    "EPIOQN": [...],     # 1 proje
-    "PULPO": [...],      # 2 proje
-    "OZMEN": [...],      # 1 proje
-}
-# Toplam: 10 şirket, 38 proje
-```
-
-> Detaylı liste için bkz: `sirketler_projeler.md`
-
-### Frontmatter Formatı
-```markdown
----
-proje: "ENVEX - BHP Escondida Sözleşme Yönetimi"
-created: 2026-02-02
----
-
-# Başlık
-
-İçerik...
-```
-
-- Her not/görev **tek projeye** ait olabilir
-- `proje: null` = projesi yok
-- Proje formatı: `"SIRKET - Proje Adı"`
-
-### Filtre UI (Not ve Görev tab'larında)
-```
-┌─────────────────────────────────┐
-│ 🔽 Filtre: Tümü                 │
-├─────────────────────────────────┤
-│ ▶ Kart 1                        │
-│ ▶ Kart 2                        │
-└─────────────────────────────────┘
-```
-
-### Dropdown Seçenekleri
-```
-Tümü
-Projesi Yok
-ENVEX - BHP Escondida Sözleşme Yönetimi
-ENVEX - ABD ENVEX Satış Ağı
-...
-COREX - Corpus Christi Güneş Enerjisi Santrali
-...
-```
-
-### Aksiyonlar (Güncel)
-- **Notlar:** `📥Gelen | ✅Görev | 📁Proje | ✏️Düzenle | 🗑️Sil`
-- **Görevler:** `✅Tamamla | 📝Not | 📁Proje | 📥Gelen | ✏️Düzenle | 🗑️Sil`
-
-### Proje Fonksiyonları
-```python
-def get_proje_options() -> list[str]:
-    """Dropdown için proje seçenekleri: ['Tümü', 'Projesi Yok', 'SIRKET - Proje', ...]"""
-
-def get_items_filtered(folder_type: str, proje: str = None) -> list[dict]:
-    """Projeye göre filtrelenmiş öğeler"""
-
-def update_proje(filename: str, folder: str, proje: str):
-    """Dosyanın projesini güncelle"""
-```
-
-### Parsing Fonksiyonları (Single Source of Truth)
-```python
-def parse_frontmatter(content: str) -> tuple[dict, str]:
-    """Frontmatter ve içeriği ayır"""
-
-def create_frontmatter(proje: str = None) -> str:
-    """Yeni frontmatter oluştur"""
-
-def parse_body(body: str, fallback_title: str = "") -> tuple[str, str]:
-    """Body'den başlık ve içerik ayır - kod tekrarını önler"""
-```
-
-### UI Render Fonksiyonları (Single Source of Truth)
-```python
-def render_card(item, folder, key_prefix):
-    """Tek kart yapısı - tüm tablar için aynı"""
-
-def render_tab(items, folder, key_prefix):
-    """Tab içeriği render"""
-
-def render_filter(folder_type, filter_state_key, select_key):
-    """Proje filtresi render - kod tekrarını önler"""
-```
-
-### Session State (Filtreler)
-```python
-st.session_state.notlar_filter = "Tümü"    # Notlar tab filtresi
-st.session_state.gorevler_filter = "Tümü"  # Görevler tab filtresi
-st.session_state.proje_mode = False        # Proje seçim modu
-st.session_state.proje_item = None         # Proje atanacak öğe
-```
-
-## Performans Stratejisi (YAGNI)
-
-**Şu an:** Pure Frontmatter
-- Her dosyadan YAML frontmatter okunur
-- Basit ve yeterli performans
-
-**İleride (gerekirse):** Frontmatter + SQLite Cache
-- Frontmatter = Source of Truth
-- SQLite = Arama/Filtre indeksi
-- 10,000+ not için düşünülebilir
