@@ -336,104 +336,179 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# CSS Stilleri
+# CSS Stilleri - iPhone 15 optimized
 CSS_STYLES = """
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
     * {
         font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
         -webkit-tap-highlight-color: transparent;
     }
-    .stApp { background: #f2f2f7; }
+
+    /* Ana layout - safe area desteği */
+    .stApp {
+        background: #f2f2f7;
+    }
     .main .block-container {
-        padding: 0.5rem 1rem 2rem 1rem !important;
+        padding: 0.25rem 0.75rem 1rem 0.75rem !important;
+        padding-top: env(safe-area-inset-top, 0.25rem) !important;
+        padding-bottom: env(safe-area-inset-bottom, 1rem) !important;
         max-width: 100% !important;
     }
-    [data-testid="stSidebar"] { display: none; }
+
+    /* Streamlit header/footer gizle */
+    [data-testid="stSidebar"],
+    [data-testid="stHeader"],
+    footer,
+    #MainMenu { display: none !important; }
+
+    /* Header bölümü - kompakt */
+    [data-testid="stImage"] {
+        margin-bottom: 0.25rem !important;
+    }
+    [data-testid="stImage"] img {
+        max-height: 28px !important;
+        width: auto !important;
+    }
+
+    /* Tab bar - iOS segment control stili */
     .stTabs [data-baseweb="tab-list"] {
         gap: 0;
-        background: #ffffff;
-        border-radius: 12px;
-        padding: 4px;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        background: #e5e5ea;
+        border-radius: 9px;
+        padding: 2px;
+        margin-bottom: 0.5rem;
     }
     .stTabs [data-baseweb="tab"] {
         flex: 1;
         justify-content: center;
-        padding: 8px 4px;
-        font-size: 0.7rem;
+        padding: 6px 2px;
+        font-size: 0.65rem;
         font-weight: 500;
-        color: #8e8e93;
-        border-radius: 8px;
-        min-height: 44px;
+        color: #1c1c1e;
+        border-radius: 7px;
+        min-height: 32px;
+        background: transparent;
     }
     .stTabs [data-baseweb="tab"][aria-selected="true"] {
-        background: #007aff;
-        color: white;
+        background: #ffffff;
+        color: #1c1c1e;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.12);
     }
     .stTabs [data-baseweb="tab-panel"] {
-        padding-top: 1rem;
+        padding-top: 0.5rem;
     }
-    h1 { font-weight: 600 !important; font-size: 1.3rem !important; color: #1c1c1e !important; margin-bottom: 0.5rem !important; }
-    h2 { font-weight: 600 !important; font-size: 1.1rem !important; color: #1c1c1e !important; }
-    h3 { font-weight: 600 !important; font-size: 1rem !important; color: #1c1c1e !important; }
+
+    /* Typography - kompakt */
+    h1 { font-weight: 600 !important; font-size: 1.1rem !important; color: #1c1c1e !important; margin: 0 0 0.25rem 0 !important; }
+    h2 { font-weight: 600 !important; font-size: 1rem !important; color: #1c1c1e !important; margin: 0 !important; }
+    h3 { font-weight: 600 !important; font-size: 0.9rem !important; color: #1c1c1e !important; }
+    p { font-size: 0.8rem !important; line-height: 1.3 !important; }
+
+    /* Butonlar - iOS stili */
     .stButton > button {
         background: #007aff !important;
         color: white !important;
         border: none !important;
         border-radius: 10px !important;
-        padding: 0.7rem 1rem !important;
+        padding: 0.5rem 0.75rem !important;
         font-weight: 500 !important;
-        font-size: 0.875rem !important;
-        min-height: 44px !important;
+        font-size: 0.8rem !important;
+        min-height: 36px !important;
         touch-action: manipulation;
     }
     .stButton > button:hover { background: #0056b3 !important; }
-    .stButton > button:active { transform: scale(0.95); }
+    .stButton > button:active { transform: scale(0.97); }
+
+    /* Text area - kompakt */
     .stTextArea > div > div > textarea {
         background: #ffffff !important;
         border: 1px solid #e5e5ea !important;
-        border-radius: 12px !important;
-        padding: 0.75rem 1rem !important;
+        border-radius: 10px !important;
+        padding: 0.6rem 0.75rem !important;
         font-size: 16px !important;
-        line-height: 1.5 !important;
+        line-height: 1.4 !important;
     }
     .stTextArea > div > div > textarea:focus {
         border-color: #007aff !important;
-        box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.15) !important;
+        box-shadow: 0 0 0 2px rgba(0, 122, 255, 0.15) !important;
     }
-    hr { border: none !important; height: 1px !important; background: #e5e5ea !important; margin: 0.8rem 0 !important; }
-    .stCaption { color: #8e8e93 !important; font-size: 0.7rem !important; }
-    p { font-size: 0.875rem !important; }
-    ::-webkit-scrollbar { width: 0px; height: 0px; }
-    .streamlit-expanderContent { padding: 0.5rem !important; }
-    .streamlit-expanderContent .stCaption {
-        display: -webkit-box !important;
-        -webkit-line-clamp: 3 !important;
-        -webkit-box-orient: vertical !important;
-        overflow: hidden !important;
+
+    /* Expander kartları - kompakt iOS list stili */
+    .streamlit-expanderHeader {
+        background: #ffffff !important;
+        border-radius: 10px !important;
+        padding: 0.5rem 0.75rem !important;
+        margin-bottom: 0.35rem !important;
     }
     .streamlit-expanderHeader p {
+        font-size: 0.85rem !important;
+        font-weight: 500 !important;
         white-space: nowrap !important;
         overflow: hidden !important;
         text-overflow: ellipsis !important;
+        margin: 0 !important;
     }
+    .streamlit-expanderContent {
+        padding: 0.4rem 0.5rem !important;
+        background: #ffffff !important;
+        border-radius: 0 0 10px 10px !important;
+        margin-top: -0.4rem !important;
+    }
+    .streamlit-expanderContent .stCaption {
+        font-size: 0.7rem !important;
+        display: -webkit-box !important;
+        -webkit-line-clamp: 2 !important;
+        -webkit-box-orient: vertical !important;
+        overflow: hidden !important;
+        margin: 0 !important;
+    }
+
+    /* Segmented control - kompakt */
     .streamlit-expanderContent [data-testid="stSegmentedControl"] {
         display: flex !important;
         justify-content: center !important;
+        margin-top: 0.4rem !important;
     }
     .streamlit-expanderContent [data-testid="stSegmentedControl"] > div {
         width: 100% !important;
-        max-width: 360px !important;
     }
     .streamlit-expanderContent [data-testid="stSegmentedControl"] button {
         flex: 1 !important;
-        min-height: 44px !important;
-        font-size: 0.75rem !important;
-        padding: 0.4rem 0.2rem !important;
+        min-height: 32px !important;
+        font-size: 0.65rem !important;
+        padding: 0.3rem 0.1rem !important;
     }
+
+    /* Selectbox/Dropdown - kompakt */
+    .stSelectbox > div > div {
+        min-height: 36px !important;
+    }
+    .stSelectbox label {
+        font-size: 0.75rem !important;
+    }
+
+    /* Genel spacing */
+    hr { display: none !important; }
+    .stCaption { color: #8e8e93 !important; font-size: 0.7rem !important; }
+    ::-webkit-scrollbar { width: 0px; height: 0px; }
+
+    /* Columns gap azalt */
+    [data-testid="column"] {
+        padding: 0 0.25rem !important;
+    }
+
+    /* Desktop */
     @media (min-width: 768px) {
-        .main .block-container { padding: 1rem 3rem !important; max-width: 800px !important; }
+        .main .block-container {
+            padding: 1rem 2rem !important;
+            max-width: 600px !important;
+        }
+        .stTabs [data-baseweb="tab"] {
+            font-size: 0.8rem;
+            min-height: 40px;
+        }
     }
 </style>
 """
@@ -481,11 +556,11 @@ archive_count = get_item_count("arsiv")
 trash_count = get_item_count("cop_kutusu")
 
 # Başlık ve Yeni Giriş butonu
-col1, col2 = st.columns([3, 1])
+col1, col2 = st.columns([4, 1])
 with col1:
-    st.image("logo.webp", width=120)
+    st.image("logo.webp", width=90)
 with col2:
-    if st.button("+ Yeni", use_container_width=True):
+    if st.button("＋", use_container_width=True, help="Yeni giriş"):
         st.session_state.edit_mode = True
         st.session_state.selected_item = None
         st.rerun()
@@ -662,11 +737,11 @@ else:
 
     # Tab menü
     tab1, tab2, tab3, tab4, tab5 = st.tabs([
-        f"📥 Gelen ({inbox_count})",
-        f"📝 Not ({notes_count})",
-        f"✅ Görev ({tasks_count})",
-        f"📦 Arşiv ({archive_count})",
-        f"🗑️ Çöp ({trash_count})"
+        f"📥 {inbox_count}",
+        f"📝 {notes_count}",
+        f"✅ {tasks_count}",
+        f"📦 {archive_count}",
+        f"🗑️ {trash_count}"
     ])
 
     with tab1:
