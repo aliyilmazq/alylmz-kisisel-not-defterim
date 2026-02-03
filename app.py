@@ -364,6 +364,71 @@ def toggle_pin(file_id: str, folder_type: str):
     save_file(title, body_content, folder_type, frontmatter.get("proje"), file_id, new_pinned)
 
 
+def get_or_create_export_folder() -> str:
+    """Export klasörünü al veya oluştur"""
+    service = get_drive_service()
+    folder_ids = get_folder_ids()
+
+    if "export" in folder_ids:
+        return folder_ids["export"]
+
+    # Klasör yoksa oluştur
+    file_metadata = {
+        'name': 'export',
+        'mimeType': 'application/vnd.google-apps.folder',
+        'parents': [SHARED_DRIVE_ID]
+    }
+    folder = service.files().create(
+        body=file_metadata,
+        supportsAllDrives=True,
+        fields='id'
+    ).execute()
+
+    return folder.get('id')
+
+
+def export_items(items: list[dict], export_name: str):
+    """Öğeleri tek bir markdown dosyasına export et"""
+    service = get_drive_service()
+    export_folder_id = get_or_create_export_folder()
+
+    # Markdown içeriği oluştur
+    today = datetime.now().strftime("%Y-%m-%d %H:%M")
+    content_lines = [f"# Export: {export_name}", f"Tarih: {today}", f"Toplam: {len(items)} öğe", "", "---", ""]
+
+    for item in items:
+        pinned_mark = "📌 " if item.get('pinned') else ""
+        proje_mark = f" 📁 {item.get('proje')}" if item.get('proje') else ""
+        content_lines.append(f"## {pinned_mark}{item['title']}{proje_mark}")
+        content_lines.append("")
+        if item.get('content'):
+            content_lines.append(item['content'])
+            content_lines.append("")
+        content_lines.append("---")
+        content_lines.append("")
+
+    md_content = "\n".join(content_lines)
+
+    # Dosya adı
+    safe_name = "".join(c if c.isalnum() or c in (' ', '-', '_') else '_' for c in export_name)
+    filename = f"export-{datetime.now().strftime('%Y%m%d-%H%M')}-{safe_name[:30]}.md"
+
+    # Drive'a kaydet
+    media = MediaInMemoryUpload(md_content.encode('utf-8'), mimetype='text/markdown')
+    file_metadata = {
+        'name': filename,
+        'parents': [export_folder_id],
+        'mimeType': 'text/markdown'
+    }
+    service.files().create(
+        body=file_metadata,
+        media_body=media,
+        supportsAllDrives=True
+    ).execute()
+
+    return filename
+
+
 # Streamlit Arayüzü
 st.set_page_config(
     page_title="Notlarım",
@@ -845,13 +910,29 @@ else:
         render_tab(inbox, "inbox", "inbox")
 
     with tab2:
-        render_filter("notlar", "notlar_filter", "notlar_filter_select")
+        col_filter, col_export = st.columns([4, 1])
+        with col_filter:
+            render_filter("notlar", "notlar_filter", "notlar_filter_select")
         filtered_notes = get_items_filtered("notlar", st.session_state.notlar_filter)
+        with col_export:
+            if st.button("📤", key="export_notlar", help="Export"):
+                if filtered_notes:
+                    filename = export_items(filtered_notes, f"notlar-{st.session_state.notlar_filter}")
+                    st.toast(f"✅ {len(filtered_notes)} not export edildi")
+                    st.cache_data.clear()
         render_tab(filtered_notes, "notlar", "note")
 
     with tab3:
-        render_filter("gorevler", "gorevler_filter", "gorevler_filter_select")
+        col_filter, col_export = st.columns([4, 1])
+        with col_filter:
+            render_filter("gorevler", "gorevler_filter", "gorevler_filter_select")
         filtered_tasks = get_items_filtered("gorevler", st.session_state.gorevler_filter)
+        with col_export:
+            if st.button("📤", key="export_gorevler", help="Export"):
+                if filtered_tasks:
+                    filename = export_items(filtered_tasks, f"gorevler-{st.session_state.gorevler_filter}")
+                    st.toast(f"✅ {len(filtered_tasks)} görev export edildi")
+                    st.cache_data.clear()
         render_tab(filtered_tasks, "gorevler", "task")
 
     with tab4:
