@@ -351,17 +351,34 @@ CSS_STYLES = """
         background: #f2f2f7;
     }
     .main .block-container {
-        padding: 0.25rem 0.75rem 1rem 0.75rem !important;
-        padding-top: env(safe-area-inset-top, 0.25rem) !important;
+        padding: 0.5rem 0.75rem 1rem 0.75rem !important;
         padding-bottom: env(safe-area-inset-bottom, 1rem) !important;
         max-width: 100% !important;
+    }
+    .stMainBlockContainer {
+        padding-top: 0 !important;
+    }
+    .block-container {
+        padding-top: 0.5rem !important;
     }
 
     /* Streamlit header/footer gizle */
     [data-testid="stSidebar"],
     [data-testid="stHeader"],
+    [data-testid="stToolbar"],
+    [data-testid="stDecoration"],
     footer,
+    header,
     #MainMenu { display: none !important; }
+
+    /* Üst boşluğu kaldır */
+    .stApp > header { display: none !important; }
+    .stApp [data-testid="stAppViewContainer"] {
+        padding-top: 0 !important;
+    }
+    .stApp [data-testid="stAppViewContainer"] > section:first-child {
+        padding-top: 0 !important;
+    }
 
     /* Header bölümü - kompakt */
     [data-testid="stImage"] {
