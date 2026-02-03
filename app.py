@@ -7,6 +7,12 @@ from datetime import datetime
 import requests
 import io
 
+# Erişim kontrolü
+SECRET_KEY = st.secrets.get("app_secret_key", "notlarim2024")
+if st.query_params.get("key") != SECRET_KEY:
+    st.error("🔒 Erişim engellendi")
+    st.stop()
+
 # Google Drive API Setup
 SCOPES = ['https://www.googleapis.com/auth/drive']
 SHARED_DRIVE_ID = "0AFbVhvJLQtOHUk9PVA"  # Workspace Shared Drive
