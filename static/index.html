@@ -326,12 +326,12 @@
         x-show="showProjeModal"
         x-cloak
         class="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center"
-        @click.self="showProjeModal = false"
+        @click.self="closeProjeModal()"
     >
         <div class="bg-white w-full sm:max-w-lg sm:rounded-2xl rounded-t-2xl max-h-[90vh] overflow-y-auto">
             <div class="p-4 border-b border-gray-200 flex items-center justify-between">
-                <h2 class="text-lg font-semibold">Proje Seç</h2>
-                <button @click="showProjeModal = false" class="text-gray-400 hover:text-gray-600">
+                <h2 class="text-lg font-semibold" x-text="projeCompany ? projeCompany : 'Proje Seç'"></h2>
+                <button @click="closeProjeModal()" class="text-gray-400 hover:text-gray-600">
                     <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
                     </svg>
@@ -339,19 +339,41 @@
             </div>
 
             <div class="p-2">
-                <button
-                    @click="setProje(null)"
-                    class="w-full px-4 py-3 text-left hover:bg-gray-50 rounded-lg text-gray-500"
-                >
-                    Proje Yok
-                </button>
-
-                <template x-for="company in companies" :key="company.name">
+                <!-- Level 1: Companies -->
+                <template x-if="!projeCompany">
                     <div>
-                        <div class="px-4 py-2 text-xs font-semibold text-gray-400 uppercase mt-2" x-text="company.name"></div>
-                        <template x-for="project in getProjects(company.name)" :key="project">
+                        <button
+                            @click="setProje(null)"
+                            class="w-full px-4 py-3 text-left hover:bg-gray-50 rounded-lg text-gray-500"
+                        >
+                            Proje Yok
+                        </button>
+                        <div class="border-t border-gray-100 my-1"></div>
+                        <template x-for="company in companies" :key="company.name">
                             <button
-                                @click="setProje(company.name + ' - ' + project)"
+                                @click="projeCompany = company.name"
+                                class="w-full px-4 py-3 text-left hover:bg-gray-50 rounded-lg flex justify-between items-center"
+                            >
+                                <span class="font-medium" x-text="company.name"></span>
+                                <span class="text-gray-400 text-sm" x-text="'(' + company.count + ') →'"></span>
+                            </button>
+                        </template>
+                    </div>
+                </template>
+
+                <!-- Level 2: Projects -->
+                <template x-if="projeCompany">
+                    <div>
+                        <button
+                            @click="projeCompany = null"
+                            class="w-full px-4 py-3 text-left hover:bg-gray-50 rounded-lg text-blue-500"
+                        >
+                            ← Geri
+                        </button>
+                        <div class="border-t border-gray-100 my-1"></div>
+                        <template x-for="project in getProjects(projeCompany)" :key="project">
+                            <button
+                                @click="setProje(projeCompany + ' - ' + project)"
                                 class="w-full px-4 py-3 text-left hover:bg-gray-50 rounded-lg text-sm"
                                 x-text="project"
                             ></button>
@@ -422,6 +444,7 @@
                 // Proje Modal
                 showProjeModal: false,
                 projeItem: null,
+                projeCompany: null,
 
                 // Quick Note
                 quickNote: '',
@@ -636,7 +659,13 @@
 
                 openProjeModal(item) {
                     this.projeItem = item;
+                    this.projeCompany = null;
                     this.showProjeModal = true;
+                },
+
+                closeProjeModal() {
+                    this.showProjeModal = false;
+                    this.projeCompany = null;
                 },
 
                 async setProje(proje) {
@@ -649,7 +678,7 @@
                                 proje: proje
                             })
                         });
-                        this.showProjeModal = false;
+                        this.closeProjeModal();
                         await this.loadItems();
                     } catch (e) {
                         console.error('Proje error:', e);
