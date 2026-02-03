@@ -218,55 +218,59 @@
                     </div>
 
                     <!-- Card Actions -->
-                    <div class="px-2 py-2 bg-gray-50 flex flex-wrap gap-1">
+                    <div class="px-2 py-2 bg-gray-50">
                         <!-- Inbox Actions -->
                         <template x-if="activeTab === 'inbox'">
-                            <div class="flex gap-1">
-                                <button @click="moveItem(item, 'notlar')" class="action-btn" title="Not'a taşı">📝</button>
-                                <button @click="moveItem(item, 'gorevler')" class="action-btn" title="Görev'e taşı">✅</button>
-                                <button @click="openEditModal(item)" class="action-btn" title="Düzenle">✏️</button>
-                                <button @click="deleteItem(item)" class="action-btn" title="Sil">🗑️</button>
+                            <div class="grid grid-cols-4 gap-1">
+                                <button @click="moveItem(item, 'notlar')" class="action-btn">📝 Not</button>
+                                <button @click="moveItem(item, 'gorevler')" class="action-btn">✅ Görev</button>
+                                <button @click="openEditModal(item)" class="action-btn">✏️ Düzenle</button>
+                                <button @click="deleteItem(item)" class="action-btn">🗑️ Sil</button>
                             </div>
                         </template>
 
                         <!-- Notlar Actions -->
                         <template x-if="activeTab === 'notlar'">
-                            <div class="flex gap-1">
-                                <button @click="togglePin(item)" class="action-btn" :title="item.pinned ? 'Sabitlemeyi kaldır' : 'Sabitle'">📌</button>
-                                <button @click="moveItem(item, 'inbox')" class="action-btn" title="Gelen'e taşı">📥</button>
-                                <button @click="moveItem(item, 'gorevler')" class="action-btn" title="Görev'e taşı">✅</button>
-                                <button @click="openProjeModal(item)" class="action-btn" title="Proje ata">📁</button>
-                                <button @click="openEditModal(item)" class="action-btn" title="Düzenle">✏️</button>
-                                <button @click="deleteItem(item)" class="action-btn" title="Sil">🗑️</button>
+                            <div class="grid grid-cols-3 gap-1 mb-1">
+                                <button @click="togglePin(item)" class="action-btn" x-text="item.pinned ? '📌 Kaldır' : '📌 Sabitle'"></button>
+                                <button @click="openProjeModal(item)" class="action-btn">📁 Proje</button>
+                                <button @click="moveItem(item, 'gorevler')" class="action-btn">✅ Görev</button>
+                            </div>
+                            <div class="grid grid-cols-3 gap-1">
+                                <button @click="moveItem(item, 'inbox')" class="action-btn">📥 Gelen</button>
+                                <button @click="openEditModal(item)" class="action-btn">✏️ Düzenle</button>
+                                <button @click="deleteItem(item)" class="action-btn">🗑️ Sil</button>
                             </div>
                         </template>
 
                         <!-- Gorevler Actions -->
                         <template x-if="activeTab === 'gorevler'">
-                            <div class="flex gap-1">
-                                <button @click="togglePin(item)" class="action-btn" :title="item.pinned ? 'Sabitlemeyi kaldır' : 'Sabitle'">📌</button>
-                                <button @click="moveItem(item, 'arsiv')" class="action-btn" title="Tamamla">✔️</button>
-                                <button @click="moveItem(item, 'notlar')" class="action-btn" title="Not'a taşı">📝</button>
-                                <button @click="moveItem(item, 'inbox')" class="action-btn" title="Gelen'e taşı">📥</button>
-                                <button @click="openProjeModal(item)" class="action-btn" title="Proje ata">📁</button>
-                                <button @click="openEditModal(item)" class="action-btn" title="Düzenle">✏️</button>
-                                <button @click="deleteItem(item)" class="action-btn" title="Sil">🗑️</button>
+                            <div class="grid grid-cols-4 gap-1 mb-1">
+                                <button @click="togglePin(item)" class="action-btn" x-text="item.pinned ? '📌 Kaldır' : '📌 Sabitle'"></button>
+                                <button @click="moveItem(item, 'arsiv')" class="action-btn">✔️ Tamam</button>
+                                <button @click="openProjeModal(item)" class="action-btn">📁 Proje</button>
+                                <button @click="moveItem(item, 'notlar')" class="action-btn">📝 Not</button>
+                            </div>
+                            <div class="grid grid-cols-3 gap-1">
+                                <button @click="moveItem(item, 'inbox')" class="action-btn">📥 Gelen</button>
+                                <button @click="openEditModal(item)" class="action-btn">✏️ Düzenle</button>
+                                <button @click="deleteItem(item)" class="action-btn">🗑️ Sil</button>
                             </div>
                         </template>
 
                         <!-- Arsiv Actions -->
                         <template x-if="activeTab === 'arsiv'">
-                            <div class="flex gap-1">
-                                <button @click="moveItem(item, 'gorevler')" class="action-btn" title="Geri al">↩️</button>
-                                <button @click="deleteItem(item)" class="action-btn" title="Sil">🗑️</button>
+                            <div class="grid grid-cols-2 gap-1">
+                                <button @click="moveItem(item, 'gorevler')" class="action-btn">↩️ Geri Al</button>
+                                <button @click="deleteItem(item)" class="action-btn">🗑️ Sil</button>
                             </div>
                         </template>
 
                         <!-- Cop Kutusu Actions -->
                         <template x-if="activeTab === 'cop_kutusu'">
-                            <div class="flex gap-1">
-                                <button @click="moveItem(item, 'inbox')" class="action-btn" title="Geri al">↩️</button>
-                                <button @click="deleteItem(item)" class="action-btn text-red-500" title="Kalıcı sil">🗑️</button>
+                            <div class="grid grid-cols-2 gap-1">
+                                <button @click="moveItem(item, 'inbox')" class="action-btn">↩️ Geri Al</button>
+                                <button @click="deleteItem(item)" class="action-btn text-red-500">🗑️ Kalıcı Sil</button>
                             </div>
                         </template>
                     </div>
@@ -399,15 +403,20 @@
 
     <style>
         .action-btn {
-            padding: 0.5rem 0.75rem;
-            font-size: 0.875rem;
+            padding: 0.5rem 0.25rem;
+            font-size: 0.75rem;
             background: white;
             border: 1px solid #e5e7eb;
             border-radius: 0.5rem;
             transition: all 0.15s;
+            text-align: center;
+            white-space: nowrap;
         }
         .action-btn:hover {
             background: #f3f4f6;
+        }
+        .action-btn:active {
+            background: #e5e7eb;
         }
         .line-clamp-2 {
             display: -webkit-box;
