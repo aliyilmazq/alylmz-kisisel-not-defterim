@@ -45,11 +45,21 @@ aliyilmaz-kisisel-not-defterim/    # Shared Drive ID: 0AFbVhvJLQtOHUk9PVA
 - Environment variable ile credentials
 
 **Frontend:** Single Page Application (SPA)
-- Tailwind CSS (CDN)
-- Alpine.js (reaktif UI)
+- Tailwind CSS (CDN + safelist)
+- Alpine.js (reaktif UI + store)
 - Mobile-first tasarım
 - iPhone 15 optimizasyonu
 - **CONFIG-driven mimari** (tek kaynak ilkesi)
+
+**Tailwind Safelist (dinamik class'lar için):**
+```javascript
+tailwind.config = {
+    safelist: [
+        'grid-cols-1', 'grid-cols-2', 'grid-cols-3', 'grid-cols-4', 'grid-cols-5',
+        'line-clamp-1', 'line-clamp-2', 'line-clamp-3', 'line-clamp-4', 'line-clamp-5'
+    ]
+}
+```
 
 ### CONFIG-Driven Mimari (Single Source of Truth)
 
@@ -97,7 +107,47 @@ getActions() → CONFIG.actions[activeTab]
 
 // Tüm aksiyonlar tek dispatcher'dan
 executeAction(actionId, item) → switch/case ile yönlendir
+
+// Tab satırları tek fonksiyondan
+getTabRows() → [[row1 tabs], [row2 tabs]]
+
+// Tarih formatı Türkçe
+formatDate("2026-02-02") → "2 Şubat"
+
+// İçerik genişletme kontrolü
+needsExpand(content) → satır sayısı veya karakter/40 > contentLines
 ```
+
+### Tek Kaynak Bileşenler
+
+Tüm tekrar eden UI pattern'leri tek fonksiyondan üretilir:
+
+```javascript
+// Hiyerarşik Dropdown (Filtre + Proje Seçimi)
+function hierarchicalDropdown(mode) {
+    return {
+        selectedCompany: null,
+        drillDown(company) { this.selectedCompany = company; },
+        goBack() { this.selectedCompany = null; },
+        select(value) {
+            if (mode === 'filter') this.$store.app.setFilter(value);
+            if (mode === 'proje') this.$store.app.setProje(value);
+            this.open = false;
+        }
+    };
+}
+```
+
+**Tek Kaynak Listesi:**
+
+| Bileşen | Fonksiyon | Kullanım |
+|---------|-----------|----------|
+| Kartlar | Tek template | Tüm tab'larda aynı kart |
+| Tab butonları | `getTabRows()` | 2 satır, CONFIG'den |
+| Aksiyonlar | `getActions()` + `executeAction()` | Tab'a göre butonlar |
+| Hiyerarşik dropdown | `hierarchicalDropdown(mode)` | Filtre + Proje modal |
+| API çağrıları | `api()` | Tüm HTTP istekleri |
+| Cache | `getCached()` / `setCached()` | localStorage |
 
 ### Google Drive API (Single Source of Truth)
 
@@ -212,17 +262,38 @@ Uygulama açıldığında direkt metin kutusu:
 ```
 📌 Başlık (sabitlendiyse)                  📁 (proje varsa)
 ─────────────────────────────────────────
-📁 Proje Adı (varsa)
-📅 Tarih (CONFIG.card.showDate)
-Açıklama (max 2 satır, genişletilebilir)  [▼/▲]
+📁 ENVEX - Proje Adı (truncate)  •  2 Şubat
+Açıklama metni burada görünür...
+[▼ Devamını gör]
 ─────────────────────────────────────────
-[Aksiyon butonları - 2 satır]
+[📌 Sabitle] [📁 Proje] [✅ Görev]
+[📥 Gelen]   [✏️ Düzenle] [🗑️ Sil]
 ```
 
-**Kart Özellikleri:**
-- Tarih gösterimi: `CONFIG.card.showDate`
-- İçerik satır limiti: `CONFIG.card.contentLines`
-- Genişlet/daralt: `CONFIG.card.expandable` (uzun içerikler için)
+**CONFIG Ayarları:**
+```javascript
+CONFIG.card = {
+    showDate: true,      // Tarih göster (Türkçe format)
+    contentLines: 2,     // Kaç satır göster
+    expandable: true     // Genişlet butonu
+}
+```
+
+**Kart Helper Fonksiyonları:**
+
+| Fonksiyon | Açıklama |
+|-----------|----------|
+| `formatDate(dateStr)` | "2026-02-02" → "2 Şubat" |
+| `needsExpand(content)` | Satır/karakter kontrolü |
+| `.truncate-proje` | Uzun proje adları için CSS |
+
+**CSS Utilities:**
+```css
+.line-clamp-1 ... .line-clamp-5  /* İçerik kısıtlama */
+.truncate-proje { max-width: 200px; ... }  /* Proje adı */
+.whitespace-pre-wrap  /* Satır sonları koru */
+.break-words  /* Uzun kelimeler */
+```
 
 ### Aksiyonlar (İkon + İsim, 2 Satır)
 
@@ -248,12 +319,21 @@ Açıklama (max 2 satır, genişletilebilir)  [▼/▲]
 ↩️ Geri Al | 🗑️ Sil
 ```
 
-### Proje Seçimi (Hiyerarşik)
+### Hiyerarşik Dropdown (Tek Kaynak)
 
-Filtre ile aynı mantık:
+Filtre ve Proje seçimi aynı component'ı kullanır:
+
+```javascript
+// Kullanım
+x-data="hierarchicalDropdown('filter')"  // Filtre için
+x-data="hierarchicalDropdown('proje')"   // Proje seçimi için
+```
+
+**Akış:**
 1. Önce şirket listesi gösterilir
 2. Şirkete tıklayınca projeleri açılır
 3. ← Geri ile şirket listesine dön
+4. Seçim yapınca mode'a göre `setFilter()` veya `setProje()` çağrılır
 
 ### iPhone 15 Optimizasyonları
 
@@ -429,6 +509,48 @@ clearLocalCache()           // Tüm local cache sil
 // Render.com cold start'ı önler
 setInterval(() => fetch('/api/auth?key=...'), 5 * 60 * 1000);
 ```
+
+### Skeleton Loading
+
+Yükleme sırasında animasyonlu placeholder kartlar:
+
+```css
+.skeleton {
+    background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+    background-size: 200% 100%;
+    animation: skeleton-loading 1.5s infinite;
+}
+```
+
+- "Yükleniyor..." yerine gri kartlar gösterilir
+- Kullanıcı içeriğin geleceğini görsel olarak anlar
+
+### Arka Plan Prefetch
+
+```javascript
+prefetchTabs() {
+    // Aktif tab dışındaki tab'ları arka planda yükle
+    const otherTabs = ['inbox', 'notlar', 'gorevler'].filter(t => t !== this.activeTab);
+    otherTabs.forEach(tab => {
+        this.api('GET', `/api/items/${tab}?filter=Tümü`)
+            .then(items => this.setCached(`items_${tab}_Tümü`, items));
+    });
+}
+```
+
+- Giriş yapınca diğer tab'lar arka planda cache'lenir
+- Tab geçişi anında olur
+
+### Gzip Sıkıştırma
+
+```python
+# main.py
+from fastapi.middleware.gzip import GZipMiddleware
+app.add_middleware(GZipMiddleware, minimum_size=500)
+```
+
+- 500 byte üzeri API yanıtları sıkıştırılır
+- Veri transferi azalır
 
 ### Optimistic UI
 
