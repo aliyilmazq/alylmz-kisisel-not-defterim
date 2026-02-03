@@ -612,9 +612,22 @@ CSS_STYLES = """
     .stCaption { color: #8e8e93 !important; font-size: 0.7rem !important; }
     ::-webkit-scrollbar { width: 0px; height: 0px; }
 
-    /* Columns gap azalt */
+    /* Columns - yan yana zorla, wrap engelle */
     [data-testid="column"] {
-        padding: 0 0.25rem !important;
+        padding: 0 0.15rem !important;
+        min-width: 0 !important;
+    }
+    [data-testid="stHorizontalBlock"] {
+        flex-wrap: nowrap !important;
+        gap: 0.25rem !important;
+        align-items: center !important;
+    }
+
+    /* Kompakt butonlar */
+    [data-testid="stHorizontalBlock"] .stButton > button {
+        padding: 0.4rem 0.6rem !important;
+        min-width: auto !important;
+        white-space: nowrap !important;
     }
 
     /* Desktop */
@@ -674,16 +687,16 @@ archive_count = get_item_count("arsiv")
 trash_count = get_item_count("cop_kutusu")
 
 # Başlık ve butonlar
-col1, col2, col3 = st.columns([5, 2, 1])
+col1, col2, col3 = st.columns([3, 2, 1])
 with col1:
-    st.image("logo.webp", width=112)
+    st.image("logo.webp", width=100)
 with col2:
     if st.button("＋ Yeni", use_container_width=True, type="primary"):
         st.session_state.edit_mode = True
         st.session_state.selected_item = None
         st.rerun()
 with col3:
-    if st.button("🔄", help="Yenile"):
+    if st.button("🔄"):
         st.cache_data.clear()
         st.rerun()
 
@@ -915,7 +928,7 @@ else:
 
     with tab2:
         filtered_notes = get_items_filtered("notlar", st.session_state.notlar_filter)
-        col_filter, col_export = st.columns([5, 1])
+        col_filter, col_export = st.columns([4, 1])
         with col_filter:
             render_filter("notlar", "notlar_filter", "notlar_filter_select")
         with col_export:
@@ -927,7 +940,7 @@ else:
 
     with tab3:
         filtered_tasks = get_items_filtered("gorevler", st.session_state.gorevler_filter)
-        col_filter, col_export = st.columns([5, 1])
+        col_filter, col_export = st.columns([4, 1])
         with col_filter:
             render_filter("gorevler", "gorevler_filter", "gorevler_filter_select")
         with col_export:
