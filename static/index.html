@@ -201,7 +201,7 @@
             </template>
 
             <template x-for="item in items" :key="item.id">
-                <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                <div class="bg-white rounded-xl border border-gray-200 overflow-hidden" x-data="{ expanded: false }">
                     <!-- Card Header -->
                     <div class="px-4 py-3 border-b border-gray-100">
                         <div class="flex items-start gap-2">
@@ -209,12 +209,25 @@
                             <h3 class="font-medium text-gray-800 flex-1" x-text="item.title"></h3>
                             <span x-show="item.proje" class="text-xs text-gray-400">📁</span>
                         </div>
-                        <p x-show="item.proje" class="text-xs text-blue-500 mt-1" x-text="item.proje"></p>
+                        <div class="flex items-center gap-2 mt-1">
+                            <span x-show="item.proje" class="text-xs text-blue-500" x-text="item.proje"></span>
+                            <span x-show="item.proje && item.created" class="text-xs text-gray-300">•</span>
+                            <span x-show="item.created" class="text-xs text-gray-400" x-text="item.created"></span>
+                        </div>
                     </div>
 
                     <!-- Card Body -->
-                    <div x-show="item.content" class="px-4 py-2">
-                        <p class="text-sm text-gray-600 line-clamp-2" x-text="item.content"></p>
+                    <div x-show="item.content" class="px-4 py-2" @click="expanded = !expanded">
+                        <p
+                            class="text-sm text-gray-600 cursor-pointer"
+                            :class="expanded ? '' : 'line-clamp-2'"
+                            x-text="item.content"
+                        ></p>
+                        <span
+                            x-show="item.content && item.content.length > 100"
+                            class="text-xs text-blue-500 cursor-pointer"
+                            x-text="expanded ? '▲ Daralt' : '▼ Genişlet'"
+                        ></span>
                     </div>
 
                     <!-- Card Actions -->
