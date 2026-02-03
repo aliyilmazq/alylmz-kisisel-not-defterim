@@ -430,6 +430,31 @@ clearLocalCache()           // Tüm local cache sil
 setInterval(() => fetch('/api/auth?key=...'), 5 * 60 * 1000);
 ```
 
+### Optimistic UI
+
+Tüm aksiyonlar anında UI'da yansır, API arka planda çalışır:
+
+```javascript
+// Örnek: togglePin
+async togglePin(item) {
+    // 1. Önce UI güncelle (anlık)
+    item.pinned = !item.pinned;
+    this.items = [...this.items].sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0));
+
+    // 2. API arka planda (hata olursa reload)
+    this.api('POST', `/api/items/${item.id}/pin?folder=${this.activeTab}`)
+        .catch(e => this.loadItems());
+}
+```
+
+**Optimistic aksiyonlar:**
+- `togglePin`: Anlık toggle ve sıralama
+- `moveItem`: Anlık listeden kaldırma
+- `deleteItem`: Anlık listeden kaldırma
+- `setProje`: Anlık proje güncelleme
+- `saveItem` (edit): Anlık başlık/içerik güncelleme
+- `quickSave`: Anlık listeye ekleme
+
 ### Yenile Butonu
 
 - Backend cache temizler
