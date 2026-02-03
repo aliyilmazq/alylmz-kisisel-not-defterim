@@ -129,13 +129,25 @@ includeItemsFromAllDrives=True
 ### Header
 
 ```
-[BEIREK Logo]  [🔄 Yenile] [＋ Yeni] (mavi buton)
+[BEIREK Logo]                    [🔄 Yenile]
 ```
 
-### Tab Menü
+### Hızlı Not Girişi
+
+Uygulama açıldığında direkt metin kutusu:
+```
+[Hızlı not ekle...                    ] [Kaydet]
+```
+
+- İlk satır = başlık, geri kalan = içerik
+- **Cmd+Enter** ile hızlı kaydet
+- Inbox'a otomatik kaydedilir
+
+### Tab Menü (2 Satır)
 
 ```
-📥 Gelen (3) | 📝 Not (5) | ✅ Görev (2) | 📦 Arşiv (1) | 🗑️ Çöp (0)
+📥 Gelen (3) | 📝 Not (5) | ✅ Görev (2)
+     📦 Arşiv (1)   |   🗑️ Çöp (0)
 ```
 
 | Tab | Açıklama |
@@ -157,25 +169,36 @@ Açıklama (max 2 satır)
 [Aksiyon butonları]
 ```
 
-### Aksiyonlar (Sadece İkon)
+### Aksiyonlar (İkon + İsim, 2 Satır)
 
-- **Gelen Kutusu:** `📝 | ✅ | ✏️ | 🗑️`
-- **Notlar:** `📌 | 📥 | ✅ | 📁 | ✏️ | 🗑️`
-- **Görevler:** `📌 | ✔️ | 📝 | 📥 | 📁 | ✏️ | 🗑️`
-- **Arşiv:** `↩️ | 🗑️`
-- **Çöp:** `↩️ | 🗑️`
+**Gelen Kutusu:**
+```
+📝 Not | ✅ Görev | ✏️ Düzenle | 🗑️ Sil
+```
 
-| İkon | Anlam |
-|------|-------|
-| 📝 | Not'a taşı |
-| 📥 | Gelen'e taşı |
-| ✅ | Görev'e taşı |
-| ✔️ | Tamamla (Arşiv'e) |
-| 📌 | Sabitle/Kaldır |
-| 📁 | Proje ata |
-| ✏️ | Düzenle |
-| 🗑️ | Sil |
-| ↩️ | Geri al |
+**Notlar:**
+```
+📌 Sabitle | 📁 Proje | ✅ Görev
+📥 Gelen  | ✏️ Düzenle | 🗑️ Sil
+```
+
+**Görevler:**
+```
+📌 Sabitle | ✔️ Tamam | 📁 Proje | 📝 Not
+📥 Gelen  | ✏️ Düzenle | 🗑️ Sil
+```
+
+**Arşiv / Çöp:**
+```
+↩️ Geri Al | 🗑️ Sil
+```
+
+### Proje Seçimi (Hiyerarşik)
+
+Filtre ile aynı mantık:
+1. Önce şirket listesi gösterilir
+2. Şirkete tıklayınca projeleri açılır
+3. ← Geri ile şirket listesine dön
 
 ### iPhone 15 Optimizasyonları
 
@@ -315,6 +338,48 @@ get_proje_options(sirket: str = None) -> list[str]
 get_companies_with_counts() -> list[dict]
 clear_cache()
 ```
+
+## Performans Optimizasyonları
+
+### Backend Cache (TTL)
+
+```python
+CACHE_DURATION = 30  # seconds
+
+# Cached fonksiyonlar:
+get_items(folder_type)      # 30sn cache
+get_all_counts()            # 30sn cache
+
+# Cache temizleme:
+clear_cache()               # Tüm cache sıfırlanır
+```
+
+### Frontend Cache (localStorage)
+
+```javascript
+// Cache-first strateji:
+// 1. Önce localStorage'dan göster (anlık)
+// 2. API'den çek ve güncelle
+// 3. localStorage'a kaydet
+
+getCached(key)              // Cache'den oku
+setCached(key, data, ttl)   // Cache'e yaz (30sn TTL)
+clearLocalCache()           // Tüm local cache sil
+```
+
+### Keep-Alive Ping
+
+```javascript
+// Her 5 dakikada bir API'ye ping
+// Render.com cold start'ı önler
+setInterval(() => fetch('/api/auth?key=...'), 5 * 60 * 1000);
+```
+
+### Yenile Butonu
+
+- Backend cache temizler
+- localStorage cache temizler
+- Tüm veriyi yeniden çeker
 
 ## Gereksinimler (FastAPI)
 
