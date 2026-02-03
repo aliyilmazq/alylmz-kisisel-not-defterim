@@ -10,6 +10,7 @@ from googleapiclient.http import MediaInMemoryUpload
 from google.auth.transport.requests import AuthorizedSession
 from datetime import datetime
 from functools import lru_cache
+import time
 
 # Config
 SCOPES = ['https://www.googleapis.com/auth/drive']
@@ -89,6 +90,25 @@ FOLDER_CONFIG = {
 _drive_service = None
 _folder_ids_cache = None
 
+# TTL Cache
+_cache = {}
+_cache_ttl = {}
+CACHE_DURATION = 30  # seconds
+
+
+def get_cached(key):
+    """Get cached value if not expired"""
+    if key in _cache and key in _cache_ttl:
+        if time.time() < _cache_ttl[key]:
+            return _cache[key]
+    return None
+
+
+def set_cached(key, value, ttl=CACHE_DURATION):
+    """Set cache with TTL"""
+    _cache[key] = value
+    _cache_ttl[key] = time.time() + ttl
+
 
 def get_credentials():
     """Environment'tan credentials al"""
@@ -143,8 +163,10 @@ def get_folder_ids() -> dict:
 
 def clear_cache():
     """Cache'i temizle"""
-    global _folder_ids_cache
+    global _folder_ids_cache, _cache, _cache_ttl
     _folder_ids_cache = None
+    _cache = {}
+    _cache_ttl = {}
 
 
 def parse_frontmatter(content: str) -> tuple[dict, str]:
@@ -194,7 +216,12 @@ def parse_body(body: str, fallback_title: str = "") -> tuple[str, str]:
 
 
 def get_items(folder_type: str) -> list[dict]:
-    """Google Drive'dan dosyaları çek"""
+    """Google Drive'dan dosyaları çek (cached)"""
+    cache_key = f"items_{folder_type}"
+    cached = get_cached(cache_key)
+    if cached is not None:
+        return cached
+
     service = get_drive_service()
     folder_ids = get_folder_ids()
 
@@ -230,6 +257,7 @@ def get_items(folder_type: str) -> list[dict]:
 
     # Sabitlenmiş öğeler üstte
     items.sort(key=lambda x: (not x.get("pinned", False)))
+    set_cached(cache_key, items)
     return items
 
 
@@ -252,14 +280,21 @@ def get_item_count(folder_type: str) -> int:
 
 
 def get_all_counts() -> dict:
-    """Tüm klasörlerin sayıları"""
-    return {
+    """Tüm klasörlerin sayıları (cached)"""
+    cache_key = "all_counts"
+    cached = get_cached(cache_key)
+    if cached is not None:
+        return cached
+
+    counts = {
         "inbox": get_item_count("inbox"),
         "notlar": get_item_count("notlar"),
         "gorevler": get_item_count("gorevler"),
         "arsiv": get_item_count("arsiv"),
         "cop_kutusu": get_item_count("cop_kutusu"),
     }
+    set_cached(cache_key, counts)
+    return counts
 
 
 def get_items_filtered(folder_type: str, proje_filter: str = "Tümü") -> list[dict]:

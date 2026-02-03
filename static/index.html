@@ -479,6 +479,41 @@
                         this.apiKey = key;
                         await this.verifyKey();
                     }
+
+                    // Keep-alive ping every 5 minutes (prevents cold start)
+                    setInterval(() => {
+                        if (this.apiKey) {
+                            fetch(`/api/auth?key=${this.apiKey}`).catch(() => {});
+                        }
+                    }, 5 * 60 * 1000);
+                },
+
+                // LocalStorage cache helpers
+                getCached(key) {
+                    try {
+                        const item = localStorage.getItem(`notlar_${key}`);
+                        if (item) {
+                            const { data, expiry } = JSON.parse(item);
+                            if (Date.now() < expiry) return data;
+                            localStorage.removeItem(`notlar_${key}`);
+                        }
+                    } catch (e) {}
+                    return null;
+                },
+
+                setCached(key, data, ttl = 30000) {
+                    try {
+                        localStorage.setItem(`notlar_${key}`, JSON.stringify({
+                            data,
+                            expiry: Date.now() + ttl
+                        }));
+                    } catch (e) {}
+                },
+
+                clearLocalCache() {
+                    Object.keys(localStorage)
+                        .filter(k => k.startsWith('notlar_'))
+                        .forEach(k => localStorage.removeItem(k));
                 },
 
                 async login() {
@@ -512,20 +547,36 @@
                 },
 
                 async loadCounts() {
+                    // Try cache first
+                    const cached = this.getCached('counts');
+                    if (cached) this.counts = cached;
+
                     try {
                         const res = await fetch(`/api/counts?key=${this.apiKey}`);
                         this.counts = await res.json();
+                        this.setCached('counts', this.counts);
                     } catch (e) {
                         console.error('Counts error:', e);
                     }
                 },
 
                 async loadItems() {
-                    this.loading = true;
+                    const cacheKey = `items_${this.activeTab}_${this.currentFilter}`;
+
+                    // Try cache first for instant display
+                    const cached = this.getCached(cacheKey);
+                    if (cached) {
+                        this.items = cached;
+                        this.loading = false;
+                    } else {
+                        this.loading = true;
+                    }
+
                     try {
                         const filter = encodeURIComponent(this.currentFilter);
                         const res = await fetch(`/api/items/${this.activeTab}?key=${this.apiKey}&filter=${filter}`);
                         this.items = await res.json();
+                        this.setCached(cacheKey, this.items);
                     } catch (e) {
                         console.error('Items error:', e);
                     }
@@ -560,6 +611,7 @@
                 },
 
                 async refreshData() {
+                    this.clearLocalCache();
                     await fetch(`/api/refresh?key=${this.apiKey}`, { method: 'POST' });
                     await this.loadInitialData();
                 },
