@@ -741,16 +741,22 @@ else:
     def render_filter(folder_type: str, filter_state_key: str, select_key: str) -> str:
         proje_options = get_proje_options()
         current_filter = getattr(st.session_state, filter_state_key)
-        selected_filter = st.selectbox(
-            "🔽 Filtre",
-            options=proje_options,
-            index=proje_options.index(current_filter) if current_filter in proje_options else 0,
-            key=select_key
-        )
-        if selected_filter != current_filter:
-            setattr(st.session_state, filter_state_key, selected_filter)
-            st.rerun()
-        return selected_filter
+
+        # Kompakt filtre gösterimi
+        filter_label = "Tümü" if current_filter == "Tümü" else current_filter.split(" - ")[-1][:15]
+
+        with st.popover(f"🔽 {filter_label}"):
+            selected_filter = st.radio(
+                "Filtre",
+                options=proje_options,
+                index=proje_options.index(current_filter) if current_filter in proje_options else 0,
+                key=select_key,
+                label_visibility="collapsed"
+            )
+            if selected_filter != current_filter:
+                setattr(st.session_state, filter_state_key, selected_filter)
+                st.rerun()
+        return current_filter
 
     # Tab menü
     tab1, tab2, tab3, tab4, tab5 = st.tabs([
