@@ -673,14 +673,18 @@ tasks_count = get_item_count("gorevler")
 archive_count = get_item_count("arsiv")
 trash_count = get_item_count("cop_kutusu")
 
-# Başlık ve Yeni Giriş butonu
-col1, col2 = st.columns([4, 1])
+# Başlık ve butonlar
+col1, col2, col3 = st.columns([5, 2, 1])
 with col1:
     st.image("logo.webp", width=112)
 with col2:
     if st.button("＋ Yeni", use_container_width=True, type="primary"):
         st.session_state.edit_mode = True
         st.session_state.selected_item = None
+        st.rerun()
+with col3:
+    if st.button("🔄", help="Yenile"):
+        st.cache_data.clear()
         st.rerun()
 
 # Düzenleme modu
