@@ -178,7 +178,7 @@ def get_proje_options(sirket: str = None) -> list[str]:
 
 def parse_frontmatter(content: str) -> tuple[dict, str]:
     """Frontmatter ve içeriği ayır"""
-    frontmatter = {"proje": None, "created": None}
+    frontmatter = {"proje": None, "created": None, "pinned": False}
     body = content
 
     if content.startswith("---"):
@@ -192,21 +192,25 @@ def parse_frontmatter(content: str) -> tuple[dict, str]:
                     key, value = line.split(":", 1)
                     key = key.strip()
                     value = value.strip().strip('"').strip("'")
-                    if value.lower() in ("null", "none", ""):
-                        value = None
-                    if key in frontmatter:
+                    if key == "pinned":
+                        frontmatter[key] = value.lower() == "true"
+                    elif value.lower() in ("null", "none", ""):
+                        frontmatter[key] = None if key != "pinned" else False
+                    elif key in frontmatter:
                         frontmatter[key] = value
 
     return frontmatter, body
 
 
-def create_frontmatter(proje: str = None) -> str:
+def create_frontmatter(proje: str = None, pinned: bool = False) -> str:
     """Yeni frontmatter oluştur"""
     today = datetime.now().strftime("%Y-%m-%d")
     proje_str = f'"{proje}"' if proje else "null"
+    pinned_str = "true" if pinned else "false"
     return f"""---
 proje: {proje_str}
 created: {today}
+pinned: {pinned_str}
 ---"""
 
 
@@ -252,8 +256,11 @@ def get_items(folder_type: str) -> list[dict]:
             "proje": frontmatter.get("proje"),
             "created": frontmatter.get("created"),
             "modified": file['modifiedTime'],
+            "pinned": frontmatter.get("pinned", False),
         })
 
+    # Sabitlenmiş öğeler üstte
+    items.sort(key=lambda x: (not x.get("pinned", False)))
     return items
 
 
@@ -272,12 +279,12 @@ def get_items_filtered(folder_type: str, proje_filter: str = "Tümü") -> list[d
         return [item for item in items if item.get("proje") == proje_filter]
 
 
-def save_file(title: str, content: str, folder_type: str, proje: str = None, file_id: str = None):
+def save_file(title: str, content: str, folder_type: str, proje: str = None, file_id: str = None, pinned: bool = False):
     """Dosya kaydet veya güncelle - Shared Drive desteği"""
     service = get_drive_service()
     folder_ids = get_folder_ids()
 
-    frontmatter = create_frontmatter(proje)
+    frontmatter = create_frontmatter(proje, pinned)
     md_content = f"{frontmatter}\n\n# {title}\n\n{content}"
 
     media = MediaInMemoryUpload(md_content.encode('utf-8'), mimetype='text/markdown')
@@ -339,10 +346,22 @@ def update_proje(file_id: str, folder_type: str, proje: str):
     service = get_drive_service()
 
     content = service.files().get_media(fileId=file_id).execute().decode('utf-8')
-    _, body = parse_frontmatter(content)
+    frontmatter, body = parse_frontmatter(content)
     title, body_content = parse_body(body)
 
-    save_file(title, body_content, folder_type, proje, file_id)
+    save_file(title, body_content, folder_type, proje, file_id, frontmatter.get("pinned", False))
+
+
+def toggle_pin(file_id: str, folder_type: str):
+    """Dosyanın sabitleme durumunu değiştir"""
+    service = get_drive_service()
+
+    content = service.files().get_media(fileId=file_id).execute().decode('utf-8')
+    frontmatter, body = parse_frontmatter(content)
+    title, body_content = parse_body(body)
+
+    new_pinned = not frontmatter.get("pinned", False)
+    save_file(title, body_content, folder_type, frontmatter.get("proje"), file_id, new_pinned)
 
 
 # Streamlit Arayüzü
@@ -681,20 +700,22 @@ else:
             "empty_msg": "Gelen kutusu boş."
         },
         "notlar": {
-            "options": ["📥", "✅", "📁", "✏️", "🗑️"],
+            "options": ["📥", "✅", "📁", "✏️", "📌", "🗑️"],
             "actions": {
                 "📥": lambda item: move_file(item['id'], "notlar", "inbox"),
                 "✅": lambda item: move_file(item['id'], "notlar", "gorevler"),
+                "📌": lambda item: toggle_pin(item['id'], "notlar"),
                 "🗑️": lambda item: delete_file(item['id'], "notlar"),
             },
             "empty_msg": "Henüz not yok."
         },
         "gorevler": {
-            "options": ["✔️", "📝", "📁", "📥", "✏️", "🗑️"],
+            "options": ["✔️", "📝", "📁", "📥", "✏️", "📌", "🗑️"],
             "actions": {
                 "✔️": lambda item: move_file(item['id'], "gorevler", "arsiv"),
                 "📝": lambda item: move_file(item['id'], "gorevler", "notlar"),
                 "📥": lambda item: move_file(item['id'], "gorevler", "inbox"),
+                "📌": lambda item: toggle_pin(item['id'], "gorevler"),
                 "🗑️": lambda item: delete_file(item['id'], "gorevler"),
             },
             "empty_msg": "Henüz görev yok."
@@ -720,8 +741,10 @@ else:
     def render_card(item: dict, folder: str, key_prefix: str):
         config = TAB_CONFIG[folder]
         title_display = item['title']
+        if item.get('pinned'):
+            title_display = f"📌 {title_display}"
         if item.get('proje'):
-            title_display = f"{item['title']} 📁"
+            title_display = f"{title_display} 📁"
 
         with st.expander(title_display, expanded=False):
             if item.get('proje'):
