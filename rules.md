@@ -83,7 +83,7 @@ service = build('drive', 'v3', http=RequestsHttpAdapter(authed_session))
 
 **Secrets (Streamlit Cloud > Settings > Secrets):**
 ```toml
-app_secret_key = "1102"
+app_secret_key = "***"  # Gizli anahtar
 
 [gcp_service_account]
 type = "service_account"
@@ -102,7 +102,7 @@ client_email = "notlarim-drive@aliyilmaz-kisisel-not-defterim.iam.gserviceaccoun
 
 İki yöntemli authentication:
 
-1. **URL Parametresi:** `?key=1102` - Tarayıcı bookmark için
+1. **URL Parametresi:** `?key=***` - Tarayıcı bookmark için
 2. **Şifre Formu:** Ana ekrana eklendiğinde şifre gir, session boyunca hatırla
 
 ```python
@@ -342,7 +342,7 @@ cd /Users/alylmztr/Documents/GitHub/alylmz-kisisel-not-defterim
 streamlit run app.py --server.port 8510
 ```
 
-**URL:** http://localhost:8510?key=1102
+**URL:** http://localhost:8510?key=***
 
 ## Git İşlemleri
 
