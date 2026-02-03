@@ -92,17 +92,30 @@
         </div>
 
         <!-- Tabs -->
-        <div class="px-4 py-3 overflow-x-auto">
-            <div class="flex gap-1 min-w-max">
-                <template x-for="tab in tabs" :key="tab.id">
+        <div class="px-4 py-3">
+            <div class="grid grid-cols-3 gap-1 mb-1">
+                <template x-for="tab in tabs.slice(0, 3)" :key="tab.id">
                     <button
                         @click="activeTab = tab.id; loadItems()"
                         :class="activeTab === tab.id ? 'tab-active' : 'tab-inactive'"
-                        class="px-3 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition"
+                        class="px-2 py-2 rounded-lg text-sm font-medium transition text-center"
                     >
                         <span x-text="tab.icon"></span>
                         <span x-text="tab.label"></span>
-                        <span class="ml-1 opacity-75" x-text="'(' + (counts[tab.id] || 0) + ')'"></span>
+                        <span class="opacity-75" x-text="'(' + (counts[tab.id] || 0) + ')'"></span>
+                    </button>
+                </template>
+            </div>
+            <div class="grid grid-cols-2 gap-1">
+                <template x-for="tab in tabs.slice(3)" :key="tab.id">
+                    <button
+                        @click="activeTab = tab.id; loadItems()"
+                        :class="activeTab === tab.id ? 'tab-active' : 'tab-inactive'"
+                        class="px-2 py-2 rounded-lg text-sm font-medium transition text-center"
+                    >
+                        <span x-text="tab.icon"></span>
+                        <span x-text="tab.label"></span>
+                        <span class="opacity-75" x-text="'(' + (counts[tab.id] || 0) + ')'"></span>
                     </button>
                 </template>
             </div>
