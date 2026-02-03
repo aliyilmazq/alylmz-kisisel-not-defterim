@@ -95,7 +95,13 @@ includeItemsFromAllDrives=True
 
 ## Deployment
 
-### Render.com (Yeni)
+### Render.com (Aktif)
+
+**URL:** https://alylmz-kisisel-not-defterim.onrender.com
+
+**Erişim:**
+- Direkt: https://alylmz-kisisel-not-defterim.onrender.com?key=1102
+- Şifreli: https://alylmz-kisisel-not-defterim.onrender.com → `1102` gir
 
 **Build Command:** `pip install -r requirements-fastapi.txt`
 
@@ -105,11 +111,11 @@ includeItemsFromAllDrives=True
 - `APP_SECRET_KEY`: Erişim şifresi (1102)
 - `GCP_CREDENTIALS`: Service account JSON
 
-### Streamlit Cloud (Eski)
+**GitHub Repo:** https://github.com/aliyilmazq/alylmz-kisisel-not-defterim (public)
+
+### Streamlit Cloud (Eski - Devre Dışı)
 
 **URL:** https://aliyilmaznotdefterim.streamlit.app/
-
-**GitHub Repo:** https://github.com/aliyilmazq/alylmz-kisisel-not-defterim (public)
 
 ## Erişim Kontrolü
 
