@@ -577,7 +577,7 @@ col1, col2 = st.columns([4, 1])
 with col1:
     st.image("logo.webp", width=112)
 with col2:
-    if st.button("＋", use_container_width=True, help="Yeni giriş"):
+    if st.button("＋ Yeni", use_container_width=True, type="primary"):
         st.session_state.edit_mode = True
         st.session_state.selected_item = None
         st.rerun()
