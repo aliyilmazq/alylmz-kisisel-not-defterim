@@ -9,8 +9,24 @@ import io
 
 # Erişim kontrolü
 SECRET_KEY = st.secrets.get("app_secret_key", "notlarim2024")
-if st.query_params.get("key") != SECRET_KEY:
-    st.error("🔒 Erişim engellendi")
+
+if "authenticated" not in st.session_state:
+    st.session_state.authenticated = False
+
+# URL parametresi ile giriş
+if st.query_params.get("key") == SECRET_KEY:
+    st.session_state.authenticated = True
+
+# Giriş kontrolü
+if not st.session_state.authenticated:
+    st.title("🔒 Notlarım")
+    entered_key = st.text_input("Erişim anahtarı", type="password")
+    if st.button("Giriş", use_container_width=True):
+        if entered_key == SECRET_KEY:
+            st.session_state.authenticated = True
+            st.rerun()
+        else:
+            st.error("Yanlış anahtar")
     st.stop()
 
 # Google Drive API Setup
