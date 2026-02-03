@@ -432,12 +432,31 @@ if "notlar_filter" not in st.session_state:
 if "gorevler_filter" not in st.session_state:
     st.session_state.gorevler_filter = "Tümü"
 
-# Veri çek
-inbox = get_items("inbox")
-notes = get_items("notlar")
-tasks = get_items("gorevler")
-archive = get_items("arsiv")
-trash = get_items("cop_kutusu")
+# Tab sayıları için hızlı count fonksiyonu
+@st.cache_data(ttl=30)
+def get_item_count(folder_type: str) -> int:
+    """Klasördeki dosya sayısını hızlıca al (içerik okumadan)"""
+    service = get_drive_service()
+    folder_ids = get_folder_ids()
+
+    if folder_type not in folder_ids:
+        return 0
+
+    results = service.files().list(
+        q=f"'{folder_ids[folder_type]}' in parents and trashed=false",
+        fields="files(id)",
+        supportsAllDrives=True,
+        includeItemsFromAllDrives=True
+    ).execute()
+
+    return len(results.get('files', []))
+
+# Lazy loading - sadece sayıları al, içerikleri sonra yükle
+inbox_count = get_item_count("inbox")
+notes_count = get_item_count("notlar")
+tasks_count = get_item_count("gorevler")
+archive_count = get_item_count("arsiv")
+trash_count = get_item_count("cop_kutusu")
 
 # Başlık ve Yeni Giriş butonu
 col1, col2 = st.columns([3, 1])
@@ -621,14 +640,15 @@ else:
 
     # Tab menü
     tab1, tab2, tab3, tab4, tab5 = st.tabs([
-        f"📥 Gelen ({len(inbox)})",
-        f"📝 Not ({len(notes)})",
-        f"✅ Görev ({len(tasks)})",
-        f"📦 Arşiv ({len(archive)})",
-        f"🗑️ Çöp ({len(trash)})"
+        f"📥 Gelen ({inbox_count})",
+        f"📝 Not ({notes_count})",
+        f"✅ Görev ({tasks_count})",
+        f"📦 Arşiv ({archive_count})",
+        f"🗑️ Çöp ({trash_count})"
     ])
 
     with tab1:
+        inbox = get_items("inbox")
         render_tab(inbox, "inbox", "inbox")
 
     with tab2:
@@ -642,7 +662,9 @@ else:
         render_tab(filtered_tasks, "gorevler", "task")
 
     with tab4:
+        archive = get_items("arsiv")
         render_tab(archive, "arsiv", "archive")
 
     with tab5:
+        trash = get_items("cop_kutusu")
         render_tab(trash, "cop_kutusu", "trash")
