@@ -49,6 +49,55 @@ aliyilmaz-kisisel-not-defterim/    # Shared Drive ID: 0AFbVhvJLQtOHUk9PVA
 - Alpine.js (reaktif UI)
 - Mobile-first tasarım
 - iPhone 15 optimizasyonu
+- **CONFIG-driven mimari** (tek kaynak ilkesi)
+
+### CONFIG-Driven Mimari (Single Source of Truth)
+
+Frontend'de tüm davranışlar tek bir CONFIG objesi üzerinden yönetilir:
+
+```javascript
+const CONFIG = {
+    // Kart görünüm ayarları
+    card: {
+        showDate: true,       // Tarih göster
+        contentLines: 2,      // Sabit içerik satır sayısı
+        expandable: true      // Genişlet/daralt özelliği
+    },
+    // Tab düzeni
+    tabs: {
+        row1: 3,              // İlk satır tab sayısı
+        row2: 2               // İkinci satır tab sayısı
+    },
+    // Klasör bazlı aksiyonlar
+    actions: {
+        inbox: [[...row1_actions...]],
+        notlar: [[...row1...], [...row2...]],
+        gorevler: [[...row1...], [...row2...]],
+        arsiv: [[...actions...]],
+        cop_kutusu: [[...actions...]]
+    }
+};
+```
+
+**Avantajları:**
+- Yeni aksiyon eklemek için sadece CONFIG'e satır ekle
+- Tab düzeni değişikliği: `row1/row2` değerlerini değiştir
+- Kart görünümü: `card` ayarlarını değiştir
+- Kod tekrarı yok (5 ayrı template yerine tek template)
+- 170 satır kod azalması
+
+**Merkezi Fonksiyonlar:**
+
+```javascript
+// Tüm API çağrıları tek fonksiyondan
+api(method, url, body = null)
+
+// Aksiyon butonları CONFIG'den alınır
+getActions() → CONFIG.actions[activeTab]
+
+// Tüm aksiyonlar tek dispatcher'dan
+executeAction(actionId, item) → switch/case ile yönlendir
+```
 
 ### Google Drive API (Single Source of Truth)
 
@@ -164,10 +213,16 @@ Uygulama açıldığında direkt metin kutusu:
 📌 Başlık (sabitlendiyse)                  📁 (proje varsa)
 ─────────────────────────────────────────
 📁 Proje Adı (varsa)
-Açıklama (max 2 satır)
+📅 Tarih (CONFIG.card.showDate)
+Açıklama (max 2 satır, genişletilebilir)  [▼/▲]
 ─────────────────────────────────────────
-[Aksiyon butonları]
+[Aksiyon butonları - 2 satır]
 ```
+
+**Kart Özellikleri:**
+- Tarih gösterimi: `CONFIG.card.showDate`
+- İçerik satır limiti: `CONFIG.card.contentLines`
+- Genişlet/daralt: `CONFIG.card.expandable` (uzun içerikler için)
 
 ### Aksiyonlar (İkon + İsim, 2 Satır)
 
