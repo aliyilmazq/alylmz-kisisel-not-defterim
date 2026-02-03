@@ -314,6 +314,26 @@ Hiyerarşik popover filtre (Şirket → Proje):
 - `SIRKET (Tümü)` - Şirketin tüm notları/görevleri
 - `SIRKET - Proje` - Sadece o proje
 
+### Export Özelliği
+
+Filtre yanındaki 📤 butonu ile filtrelenmiş öğeler export edilir:
+```
+[🔽 Filtre] [📤]
+```
+
+- Export dosyası Drive'da `export/` klasörüne kaydedilir
+- Dosya formatı: `export-YYYYMMDD-HHMM-filtre-adi.md`
+- Tüm öğeler tek markdown dosyasında birleştirilir
+- Başlık, proje, içerik ve pinned durumu dahil edilir
+
+### Sabitleme (Pin) Özelliği
+
+📌 butonu ile not/görev sabitlenir:
+- Sabitli öğeler listenin en üstünde görünür
+- Başlıkta 📌 ikonu gösterilir
+- Tekrar basınca sabitleme kalkar
+- Frontmatter: `pinned: true/false`
+
 ## Session State
 
 ```python

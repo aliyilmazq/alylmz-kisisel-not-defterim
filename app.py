@@ -910,29 +910,27 @@ else:
         render_tab(inbox, "inbox", "inbox")
 
     with tab2:
-        col_filter, col_export = st.columns([4, 1])
+        filtered_notes = get_items_filtered("notlar", st.session_state.notlar_filter)
+        col_filter, col_export = st.columns([5, 1])
         with col_filter:
             render_filter("notlar", "notlar_filter", "notlar_filter_select")
-        filtered_notes = get_items_filtered("notlar", st.session_state.notlar_filter)
         with col_export:
-            if st.button("📤", key="export_notlar", help="Export"):
+            if st.button("📤", key="export_notlar"):
                 if filtered_notes:
-                    filename = export_items(filtered_notes, f"notlar-{st.session_state.notlar_filter}")
+                    export_items(filtered_notes, f"notlar-{st.session_state.notlar_filter}")
                     st.toast(f"✅ {len(filtered_notes)} not export edildi")
-                    st.cache_data.clear()
         render_tab(filtered_notes, "notlar", "note")
 
     with tab3:
-        col_filter, col_export = st.columns([4, 1])
+        filtered_tasks = get_items_filtered("gorevler", st.session_state.gorevler_filter)
+        col_filter, col_export = st.columns([5, 1])
         with col_filter:
             render_filter("gorevler", "gorevler_filter", "gorevler_filter_select")
-        filtered_tasks = get_items_filtered("gorevler", st.session_state.gorevler_filter)
         with col_export:
-            if st.button("📤", key="export_gorevler", help="Export"):
+            if st.button("📤", key="export_gorevler"):
                 if filtered_tasks:
-                    filename = export_items(filtered_tasks, f"gorevler-{st.session_state.gorevler_filter}")
+                    export_items(filtered_tasks, f"gorevler-{st.session_state.gorevler_filter}")
                     st.toast(f"✅ {len(filtered_tasks)} görev export edildi")
-                    st.cache_data.clear()
         render_tab(filtered_tasks, "gorevler", "task")
 
     with tab4:
