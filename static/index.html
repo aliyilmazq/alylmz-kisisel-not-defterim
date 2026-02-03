@@ -7,6 +7,15 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <title>Kişisel Not Defterim</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        // Tailwind safelist - dinamik class'lar için
+        tailwind.config = {
+            safelist: [
+                'grid-cols-1', 'grid-cols-2', 'grid-cols-3', 'grid-cols-4', 'grid-cols-5',
+                'line-clamp-1', 'line-clamp-2', 'line-clamp-3', 'line-clamp-4', 'line-clamp-5'
+            ]
+        }
+    </script>
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
@@ -33,11 +42,23 @@
         .action-btn:hover { background: #f3f4f6; }
         .action-btn:active { background: #e5e7eb; }
         .action-btn.danger { color: #ef4444; }
-        .line-clamp-2 {
+        /* Line clamp utilities */
+        .line-clamp-1, .line-clamp-2, .line-clamp-3, .line-clamp-4, .line-clamp-5 {
             display: -webkit-box;
-            -webkit-line-clamp: 2;
             -webkit-box-orient: vertical;
             overflow: hidden;
+        }
+        .line-clamp-1 { -webkit-line-clamp: 1; }
+        .line-clamp-2 { -webkit-line-clamp: 2; }
+        .line-clamp-3 { -webkit-line-clamp: 3; }
+        .line-clamp-4 { -webkit-line-clamp: 4; }
+        .line-clamp-5 { -webkit-line-clamp: 5; }
+        /* Proje adı truncate */
+        .truncate-proje {
+            max-width: 200px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
         /* Skeleton loading animation */
         .skeleton {
@@ -204,27 +225,32 @@
                     <!-- Card Header -->
                     <div class="px-4 py-3 border-b border-gray-100">
                         <div class="flex items-start gap-2">
-                            <span x-show="item.pinned" class="text-sm">📌</span>
-                            <h3 class="font-medium text-gray-800 flex-1" x-text="item.title"></h3>
-                            <span x-show="item.proje" class="text-xs text-gray-400">📁</span>
+                            <span x-show="item.pinned" class="text-sm flex-shrink-0">📌</span>
+                            <h3 class="font-medium text-gray-800 flex-1 break-words" x-text="item.title"></h3>
+                            <span x-show="item.proje" class="text-xs text-gray-400 flex-shrink-0">📁</span>
                         </div>
-                        <div x-show="CONFIG.card.showDate || item.proje" class="flex items-center gap-2 mt-1">
-                            <span x-show="item.proje" class="text-xs text-blue-500" x-text="item.proje"></span>
-                            <span x-show="item.proje && item.created && CONFIG.card.showDate" class="text-xs text-gray-300">•</span>
-                            <span x-show="item.created && CONFIG.card.showDate" class="text-xs text-gray-400" x-text="item.created"></span>
+                        <div x-show="item.proje || item.created" class="flex items-center gap-2 mt-1 flex-wrap">
+                            <span x-show="item.proje" class="text-xs text-blue-500 truncate-proje" x-text="item.proje" :title="item.proje"></span>
+                            <span x-show="item.proje && item.created" class="text-xs text-gray-300">•</span>
+                            <span x-show="item.created" class="text-xs text-gray-400" x-text="formatDate(item.created)"></span>
                         </div>
                     </div>
 
                     <!-- Card Body -->
-                    <div x-show="item.content" class="px-4 py-2" @click="CONFIG.card.expandable && (expanded = !expanded)">
-                        <p class="text-sm text-gray-600" :class="[CONFIG.card.expandable ? 'cursor-pointer' : '', expanded ? '' : 'line-clamp-' + CONFIG.card.contentLines]" x-text="item.content"></p>
-                        <span x-show="CONFIG.card.expandable && item.content && item.content.length > 100" class="text-xs text-blue-500 cursor-pointer" x-text="expanded ? '▲ Daralt' : '▼ Genişlet'"></span>
+                    <div x-show="item.content" class="px-4 py-2">
+                        <p class="text-sm text-gray-600 whitespace-pre-wrap break-words"
+                           :class="expanded ? '' : 'line-clamp-' + CONFIG.card.contentLines"
+                           x-text="item.content"></p>
+                        <button x-show="needsExpand(item.content)"
+                                @click.stop="expanded = !expanded"
+                                class="text-xs text-blue-500 hover:text-blue-700 mt-1 font-medium"
+                                x-text="expanded ? '▲ Daralt' : '▼ Devamını gör'"></button>
                     </div>
 
                     <!-- Card Actions (Config-driven) -->
                     <div class="px-2 py-2 bg-gray-50">
                         <template x-for="(row, rowIndex) in getActions()" :key="rowIndex">
-                            <div class="grid gap-1" :class="['grid-cols-' + row.length, rowIndex > 0 ? 'mt-1' : '']">
+                            <div class="grid gap-1" :class="'grid-cols-' + row.length" :style="rowIndex > 0 ? 'margin-top: 0.25rem' : ''">
                                 <template x-for="action in row" :key="action.id">
                                     <button @click="executeAction(action.id, item)" class="action-btn" :class="action.danger ? 'danger' : ''" x-text="action.icon + ' ' + getActionLabel(action, item)"></button>
                                 </template>
@@ -547,6 +573,27 @@
                 getActionLabel(action, item) {
                     if (action.id === 'pin' && item.pinned) return action.labelAlt;
                     return action.label;
+                },
+
+                // Tarih formatla: "2026-02-02" → "2 Şubat"
+                formatDate(dateStr) {
+                    if (!dateStr) return '';
+                    const months = ['Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran',
+                                    'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık'];
+                    const parts = dateStr.split('-');
+                    if (parts.length !== 3) return dateStr;
+                    const day = parseInt(parts[2], 10);
+                    const month = parseInt(parts[1], 10) - 1;
+                    return `${day} ${months[month] || ''}`;
+                },
+
+                // İçerik genişletme gerekli mi? (satır sayısı veya karakter uzunluğu)
+                needsExpand(content) {
+                    if (!content || !CONFIG.card.expandable) return false;
+                    const lines = content.split('\n').length;
+                    const avgCharsPerLine = 40; // Mobil ekranda yaklaşık
+                    const estimatedLines = Math.ceil(content.length / avgCharsPerLine);
+                    return lines > CONFIG.card.contentLines || estimatedLines > CONFIG.card.contentLines;
                 },
 
                 // ============ ACTIONS ============
