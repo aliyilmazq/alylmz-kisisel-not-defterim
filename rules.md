@@ -194,13 +194,24 @@ with tab1:
   [Aksiyon butonları - Segmented Control]
 ```
 
-### Aksiyonlar
+### Aksiyonlar (Sadece İkon)
 
-- **Gelen Kutusu:** `📝Not | ✅Görev | ✏️Düzenle | 🗑️Sil`
-- **Notlar:** `📥Gelen | ✅Görev | 📁Proje | ✏️Düzenle | 🗑️Sil`
-- **Görevler:** `✅Tamamla | 📝Not | 📁Proje | 📥Gelen | ✏️Düzenle | 🗑️Sil`
-- **Arşiv:** `↩️Geri | 🗑️Sil`
-- **Çöp:** `↩️Geri | ×Sil`
+- **Gelen Kutusu:** `📝 | ✅ | ✏️ | 🗑️`
+- **Notlar:** `📥 | ✅ | 📁 | ✏️ | 🗑️`
+- **Görevler:** `✔️ | 📝 | 📁 | 📥 | ✏️ | 🗑️`
+- **Arşiv:** `↩️ | 🗑️`
+- **Çöp:** `↩️ | 🗑️`
+
+| İkon | Anlam |
+|------|-------|
+| 📝 | Not'a taşı |
+| 📥 | Gelen'e taşı |
+| ✅ | Görev'e taşı |
+| ✔️ | Tamamla (Arşiv'e) |
+| 📁 | Proje ata |
+| ✏️ | Düzenle |
+| 🗑️ | Sil |
+| ↩️ | Geri al |
 
 ### iPhone 15 Optimizasyonları (CSS)
 
