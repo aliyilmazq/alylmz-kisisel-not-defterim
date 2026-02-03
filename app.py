@@ -575,7 +575,7 @@ trash_count = get_item_count("cop_kutusu")
 # Başlık ve Yeni Giriş butonu
 col1, col2 = st.columns([4, 1])
 with col1:
-    st.image("logo.webp", width=90)
+    st.image("logo.webp", width=112)
 with col2:
     if st.button("＋", use_container_width=True, help="Yeni giriş"):
         st.session_state.edit_mode = True
