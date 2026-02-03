@@ -287,15 +287,32 @@ SIRKET_PROJE_CONFIG = {
 
 ### Filtre UI (Not ve Görev tab'larında)
 
-Kompakt popover filtre:
+Hiyerarşik popover filtre (Şirket → Proje):
+
+**Birinci seviye (Şirketler):**
 ```
-[🔽 Tümü]  ← Küçük buton, tıklayınca popover açılır
+[🔽 Tümü]
+├── Tümü
+├── Projesi Yok
+├── ENVEX (12) →
+├── COREX (3) →
+└── ...
 ```
 
-- Kapalıyken sadece küçük buton
-- Tıklayınca overlay ile radio seçenekleri
-- Proje adı max 15 karakter kısaltılır
-- Seçenekler: Tümü, Projesi Yok, SIRKET - Proje (38 proje)
+**İkinci seviye (Projeler):**
+```
+[🔽 ENVEX]
+├── ← Geri
+├── ENVEX (Tümü)     ← Şirketin tüm notları
+├── BHP Escondida...
+└── ...
+```
+
+**Filtre seviyeleri:**
+- `Tümü` - Her şey
+- `Projesi Yok` - Projesi atanmamış
+- `SIRKET (Tümü)` - Şirketin tüm notları/görevleri
+- `SIRKET - Proje` - Sadece o proje
 
 ## Session State
 
