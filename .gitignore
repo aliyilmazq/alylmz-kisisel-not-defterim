@@ -1,0 +1,14 @@
+# Secrets - ASLA commit etme!
+.streamlit/secrets.toml
+*.json
+
+# Python
+__pycache__/
+*.py[cod]
+.env
+
+# Backup
+*_backup.py
+
+# OS
+.DS_Store
