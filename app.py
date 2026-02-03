@@ -483,7 +483,7 @@ trash_count = get_item_count("cop_kutusu")
 # Başlık ve Yeni Giriş butonu
 col1, col2 = st.columns([3, 1])
 with col1:
-    st.title("Notlarım")
+    st.title("📒 Notlarım")
 with col2:
     if st.button("+ Yeni", use_container_width=True):
         st.session_state.edit_mode = True
