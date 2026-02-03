@@ -655,46 +655,46 @@ else:
     # Tab konfigürasyonu
     TAB_CONFIG = {
         "inbox": {
-            "options": ["📝Not", "✅Görev", "✏️Düzenle", "🗑️Sil"],
+            "options": ["📝", "✅", "✏️", "🗑️"],
             "actions": {
-                "📝Not": lambda item: move_file(item['id'], "inbox", "notlar"),
-                "✅Görev": lambda item: move_file(item['id'], "inbox", "gorevler"),
-                "🗑️Sil": lambda item: delete_file(item['id'], "inbox"),
+                "📝": lambda item: move_file(item['id'], "inbox", "notlar"),
+                "✅": lambda item: move_file(item['id'], "inbox", "gorevler"),
+                "🗑️": lambda item: delete_file(item['id'], "inbox"),
             },
             "empty_msg": "Gelen kutusu boş."
         },
         "notlar": {
-            "options": ["📥Gelen", "✅Görev", "📁Proje", "✏️Düzenle", "🗑️Sil"],
+            "options": ["📥", "✅", "📁", "✏️", "🗑️"],
             "actions": {
-                "📥Gelen": lambda item: move_file(item['id'], "notlar", "inbox"),
-                "✅Görev": lambda item: move_file(item['id'], "notlar", "gorevler"),
-                "🗑️Sil": lambda item: delete_file(item['id'], "notlar"),
+                "📥": lambda item: move_file(item['id'], "notlar", "inbox"),
+                "✅": lambda item: move_file(item['id'], "notlar", "gorevler"),
+                "🗑️": lambda item: delete_file(item['id'], "notlar"),
             },
             "empty_msg": "Henüz not yok."
         },
         "gorevler": {
-            "options": ["✅Tamamla", "📝Not", "📁Proje", "📥Gelen", "✏️Düzenle", "🗑️Sil"],
+            "options": ["✔️", "📝", "📁", "📥", "✏️", "🗑️"],
             "actions": {
-                "✅Tamamla": lambda item: move_file(item['id'], "gorevler", "arsiv"),
-                "📝Not": lambda item: move_file(item['id'], "gorevler", "notlar"),
-                "📥Gelen": lambda item: move_file(item['id'], "gorevler", "inbox"),
-                "🗑️Sil": lambda item: delete_file(item['id'], "gorevler"),
+                "✔️": lambda item: move_file(item['id'], "gorevler", "arsiv"),
+                "📝": lambda item: move_file(item['id'], "gorevler", "notlar"),
+                "📥": lambda item: move_file(item['id'], "gorevler", "inbox"),
+                "🗑️": lambda item: delete_file(item['id'], "gorevler"),
             },
             "empty_msg": "Henüz görev yok."
         },
         "arsiv": {
-            "options": ["↩️Geri", "🗑️Sil"],
+            "options": ["↩️", "🗑️"],
             "actions": {
-                "↩️Geri": lambda item: move_file(item['id'], "arsiv", "gorevler"),
-                "🗑️Sil": lambda item: delete_file(item['id'], "arsiv"),
+                "↩️": lambda item: move_file(item['id'], "arsiv", "gorevler"),
+                "🗑️": lambda item: delete_file(item['id'], "arsiv"),
             },
             "empty_msg": "Arşiv boş."
         },
         "cop_kutusu": {
-            "options": ["↩️Geri", "×Sil"],
+            "options": ["↩️", "🗑️"],
             "actions": {
-                "↩️Geri": lambda item: move_file(item['id'], "cop_kutusu", "inbox"),
-                "×Sil": lambda item: delete_file(item['id'], "cop_kutusu"),
+                "↩️": lambda item: move_file(item['id'], "cop_kutusu", "inbox"),
+                "🗑️": lambda item: delete_file(item['id'], "cop_kutusu"),
             },
             "empty_msg": "Çöp kutusu boş."
         },
@@ -718,11 +718,11 @@ else:
                 key=f"{key_prefix}_{item['id']}",
                 label_visibility="collapsed"
             )
-            if action == "✏️Düzenle":
+            if action == "✏️":
                 st.session_state.selected_item = {**item, "folder": folder}
                 st.session_state.edit_mode = True
                 st.rerun()
-            elif action == "📁Proje":
+            elif action == "📁":
                 st.session_state.proje_mode = True
                 st.session_state.proje_item = {**item, "folder": folder}
                 st.rerun()
