@@ -121,71 +121,57 @@
             </form>
         </div>
 
-        <!-- Tabs (Config-driven) -->
+        <!-- Tabs (Config-driven, Tek Template) -->
         <div class="px-4 py-3">
-            <div class="grid gap-1" :class="'grid-cols-' + CONFIG.tabs.row1">
-                <template x-for="tab in tabs.slice(0, CONFIG.tabs.row1)" :key="tab.id">
-                    <button @click="switchTab(tab.id)" :class="activeTab === tab.id ? 'tab-active' : 'tab-inactive'"
-                        class="px-2 py-2 rounded-lg text-sm font-medium transition text-center">
-                        <span x-text="tab.icon"></span>
-                        <span x-text="tab.label"></span>
-                        <span class="opacity-75" x-text="'(' + (counts[tab.id] || 0) + ')'"></span>
-                    </button>
-                </template>
-            </div>
-            <div class="grid gap-1 mt-1" :class="'grid-cols-' + CONFIG.tabs.row2">
-                <template x-for="tab in tabs.slice(CONFIG.tabs.row1)" :key="tab.id">
-                    <button @click="switchTab(tab.id)" :class="activeTab === tab.id ? 'tab-active' : 'tab-inactive'"
-                        class="px-2 py-2 rounded-lg text-sm font-medium transition text-center">
-                        <span x-text="tab.icon"></span>
-                        <span x-text="tab.label"></span>
-                        <span class="opacity-75" x-text="'(' + (counts[tab.id] || 0) + ')'"></span>
-                    </button>
-                </template>
-            </div>
+            <template x-for="(row, rowIdx) in getTabRows()" :key="rowIdx">
+                <div class="grid gap-1" :class="'grid-cols-' + row.length" :style="rowIdx > 0 ? 'margin-top: 0.25rem' : ''">
+                    <template x-for="tab in row" :key="tab.id">
+                        <button @click="switchTab(tab.id)" :class="activeTab === tab.id ? 'tab-active' : 'tab-inactive'"
+                            class="px-2 py-2 rounded-lg text-sm font-medium transition text-center">
+                            <span x-text="tab.icon + ' ' + tab.label + ' (' + (counts[tab.id] || 0) + ')'"></span>
+                        </button>
+                    </template>
+                </div>
+            </template>
         </div>
 
         <!-- Filter & Export (for notlar and gorevler) -->
         <div x-show="hasFilter()" class="px-4 pb-3">
             <div class="flex items-center gap-2">
-                <!-- Hierarchical Dropdown (Reusable Pattern) -->
-                <div class="relative flex-1" x-data="{ open: false }">
+                <!-- Hierarchical Dropdown - Filter için -->
+                <div class="relative flex-1" x-data="hierarchicalDropdown('filter')" @click.away="open = false">
                     <button @click="open = !open" class="w-full flex items-center justify-between px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm">
-                        <span x-text="currentFilter"></span>
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
-                        </svg>
+                        <span x-text="$store.app.currentFilter"></span>
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
                     </button>
-                    <div x-show="open" @click.away="open = false" class="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-50 max-h-64 overflow-y-auto">
-                        <template x-if="!filterCompany">
+                    <div x-show="open" x-transition class="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-50 max-h-64 overflow-y-auto">
+                        <template x-if="!selectedCompany">
                             <div>
-                                <button @click="setFilter('Tümü'); open = false" class="w-full px-3 py-2 text-left text-sm hover:bg-gray-50">Tümü</button>
-                                <button @click="setFilter('Projesi Yok'); open = false" class="w-full px-3 py-2 text-left text-sm hover:bg-gray-50">Projesi Yok</button>
+                                <button @click="select('Tümü')" class="w-full px-3 py-2 text-left text-sm hover:bg-gray-50">Tümü</button>
+                                <button @click="select('Projesi Yok')" class="w-full px-3 py-2 text-left text-sm hover:bg-gray-50">Projesi Yok</button>
                                 <div class="border-t border-gray-100"></div>
-                                <template x-for="company in companies" :key="company.name">
-                                    <button @click="filterCompany = company.name" class="w-full px-3 py-2 text-left text-sm hover:bg-gray-50 flex justify-between items-center">
-                                        <span x-text="company.name"></span>
-                                        <span class="text-gray-400 text-xs" x-text="'(' + company.count + ') →'"></span>
+                                <template x-for="c in $store.app.companies" :key="c.name">
+                                    <button @click="drillDown(c.name)" class="w-full px-3 py-2 text-left text-sm hover:bg-gray-50 flex justify-between items-center">
+                                        <span x-text="c.name"></span>
+                                        <span class="text-gray-400 text-xs" x-text="'(' + c.count + ') →'"></span>
                                     </button>
                                 </template>
                             </div>
                         </template>
-                        <template x-if="filterCompany">
+                        <template x-if="selectedCompany">
                             <div>
-                                <button @click="filterCompany = null" class="w-full px-3 py-2 text-left text-sm hover:bg-gray-50 text-blue-500">← Geri</button>
-                                <button @click="setFilter(filterCompany + ' (Tümü)'); filterCompany = null; open = false" class="w-full px-3 py-2 text-left text-sm hover:bg-gray-50 font-medium" x-text="filterCompany + ' (Tümü)'"></button>
+                                <button @click="goBack()" class="w-full px-3 py-2 text-left text-sm hover:bg-gray-50 text-blue-500">← Geri</button>
+                                <button @click="select(selectedCompany + ' (Tümü)')" class="w-full px-3 py-2 text-left text-sm hover:bg-gray-50 font-medium" x-text="selectedCompany + ' (Tümü)'"></button>
                                 <div class="border-t border-gray-100"></div>
-                                <template x-for="project in getProjects(filterCompany)" :key="project">
-                                    <button @click="setFilter(filterCompany + ' - ' + project); filterCompany = null; open = false" class="w-full px-3 py-2 text-left text-sm hover:bg-gray-50" x-text="project"></button>
+                                <template x-for="p in $store.app.getProjects(selectedCompany)" :key="p">
+                                    <button @click="select(selectedCompany + ' - ' + p)" class="w-full px-3 py-2 text-left text-sm hover:bg-gray-50" x-text="p"></button>
                                 </template>
                             </div>
                         </template>
                     </div>
                 </div>
                 <button @click="exportItems()" class="p-2 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition" title="Export">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-                    </svg>
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
                 </button>
             </div>
         </div>
@@ -295,36 +281,34 @@
         </div>
     </div>
 
-    <!-- Proje Modal (Uses same hierarchical pattern) -->
+    <!-- Proje Modal (Hierarchical - Tek Kaynak) -->
     <div x-show="showProjeModal" x-cloak class="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center" @click.self="closeProjeModal()">
-        <div class="bg-white w-full sm:max-w-lg sm:rounded-2xl rounded-t-2xl max-h-[90vh] overflow-y-auto">
+        <div class="bg-white w-full sm:max-w-lg sm:rounded-2xl rounded-t-2xl max-h-[90vh] overflow-y-auto" x-data="hierarchicalDropdown('proje')">
             <div class="p-4 border-b border-gray-200 flex items-center justify-between">
-                <h2 class="text-lg font-semibold" x-text="projeCompany ? projeCompany : 'Proje Seç'"></h2>
-                <button @click="closeProjeModal()" class="text-gray-400 hover:text-gray-600">
-                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                    </svg>
+                <h2 class="text-lg font-semibold" x-text="selectedCompany || 'Proje Seç'"></h2>
+                <button @click="$store.app.closeProjeModal()" class="text-gray-400 hover:text-gray-600">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
                 </button>
             </div>
             <div class="p-2">
-                <template x-if="!projeCompany">
+                <template x-if="!selectedCompany">
                     <div>
-                        <button @click="setProje(null)" class="w-full px-4 py-3 text-left hover:bg-gray-50 rounded-lg text-gray-500">Proje Yok</button>
+                        <button @click="select(null)" class="w-full px-4 py-3 text-left hover:bg-gray-50 rounded-lg text-gray-500">Proje Yok</button>
                         <div class="border-t border-gray-100 my-1"></div>
-                        <template x-for="company in companies" :key="company.name">
-                            <button @click="projeCompany = company.name" class="w-full px-4 py-3 text-left hover:bg-gray-50 rounded-lg flex justify-between items-center">
-                                <span class="font-medium" x-text="company.name"></span>
-                                <span class="text-gray-400 text-sm" x-text="'(' + company.count + ') →'"></span>
+                        <template x-for="c in $store.app.companies" :key="c.name">
+                            <button @click="drillDown(c.name)" class="w-full px-4 py-3 text-left hover:bg-gray-50 rounded-lg flex justify-between items-center">
+                                <span class="font-medium" x-text="c.name"></span>
+                                <span class="text-gray-400 text-sm" x-text="'(' + c.count + ') →'"></span>
                             </button>
                         </template>
                     </div>
                 </template>
-                <template x-if="projeCompany">
+                <template x-if="selectedCompany">
                     <div>
-                        <button @click="projeCompany = null" class="w-full px-4 py-3 text-left hover:bg-gray-50 rounded-lg text-blue-500">← Geri</button>
+                        <button @click="goBack()" class="w-full px-4 py-3 text-left hover:bg-gray-50 rounded-lg text-blue-500">← Geri</button>
                         <div class="border-t border-gray-100 my-1"></div>
-                        <template x-for="project in getProjects(projeCompany)" :key="project">
-                            <button @click="setProje(projeCompany + ' - ' + project)" class="w-full px-4 py-3 text-left hover:bg-gray-50 rounded-lg text-sm" x-text="project"></button>
+                        <template x-for="p in $store.app.getProjects(selectedCompany)" :key="p">
+                            <button @click="select(selectedCompany + ' - ' + p)" class="w-full px-4 py-3 text-left hover:bg-gray-50 rounded-lg text-sm" x-text="p"></button>
                         </template>
                     </div>
                 </template>
@@ -398,6 +382,35 @@
             }
         };
 
+        // ============================================
+        // HIERARCHICAL DROPDOWN - Tek Kaynak Component
+        // ============================================
+        function hierarchicalDropdown(mode) {
+            return {
+                open: false,
+                selectedCompany: null,
+                mode: mode, // 'filter' veya 'proje'
+
+                drillDown(company) {
+                    this.selectedCompany = company;
+                },
+
+                goBack() {
+                    this.selectedCompany = null;
+                },
+
+                select(value) {
+                    if (this.mode === 'filter') {
+                        this.$store.app.setFilter(value);
+                    } else if (this.mode === 'proje') {
+                        this.$store.app.setProje(value);
+                    }
+                    this.selectedCompany = null;
+                    this.open = false;
+                }
+            };
+        }
+
         function app() {
             return {
                 // ============ STATE ============
@@ -421,7 +434,6 @@
                 config: {},
 
                 currentFilter: 'Tümü',
-                filterCompany: null,
 
                 showModal: false,
                 editingItem: null,
@@ -429,7 +441,6 @@
 
                 showProjeModal: false,
                 projeItem: null,
-                projeCompany: null,
 
                 quickNote: '',
 
@@ -438,6 +449,9 @@
 
                 // ============ INIT ============
                 async init() {
+                    // Alpine store olarak kaydet (hierarchical dropdown için)
+                    Alpine.store('app', this);
+
                     const urlParams = new URLSearchParams(window.location.search);
                     const key = urlParams.get('key');
                     if (key) {
@@ -564,6 +578,14 @@
 
                 getProjects(company) {
                     return this.config[company] || [];
+                },
+
+                // Tab satırlarını döndür (CONFIG'den)
+                getTabRows() {
+                    return [
+                        this.tabs.slice(0, CONFIG.tabs.row1),
+                        this.tabs.slice(CONFIG.tabs.row1)
+                    ];
                 },
 
                 getActions() {
@@ -716,20 +738,19 @@
 
                 openProjeModal(item) {
                     this.projeItem = item;
-                    this.projeCompany = null;
                     this.showProjeModal = true;
                 },
 
                 closeProjeModal() {
                     this.showProjeModal = false;
-                    this.projeCompany = null;
                 },
 
-                async setProje(proje) {
+                setProje(proje) {
+                    if (!this.projeItem) return;
                     // Optimistic UI: Hemen güncelle
                     const item = this.items.find(i => i.id === this.projeItem.id);
                     if (item) item.proje = proje;
-                    this.closeProjeModal();
+                    this.showProjeModal = false;
                     // API çağrısı arka planda
                     this.api('POST', `/api/items/${this.projeItem.id}/proje`, { folder: this.activeTab, proje })
                         .catch(e => { console.error('Proje error:', e); this.loadItems(); });
