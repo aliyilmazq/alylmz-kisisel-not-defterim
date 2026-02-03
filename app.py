@@ -154,13 +154,26 @@ def get_folder_ids():
     return folder_ids
 
 
-def get_proje_options() -> list[str]:
+def get_sirket_options() -> list[str]:
+    """Şirket listesi"""
+    return ["Tümü", "Projesi Yok"] + list(SIRKET_PROJE_CONFIG.keys())
+
+
+def get_proje_options(sirket: str = None) -> list[str]:
     """Dropdown için proje seçenekleri oluştur"""
-    options = ["Tümü", "Projesi Yok"]
-    for sirket, projeler in SIRKET_PROJE_CONFIG.items():
-        for proje in projeler:
+    if sirket and sirket in SIRKET_PROJE_CONFIG:
+        # Belirli şirketin projeleri
+        options = [f"{sirket} (Tümü)"]
+        for proje in SIRKET_PROJE_CONFIG[sirket]:
             options.append(f"{sirket} - {proje}")
-    return options
+        return options
+    else:
+        # Tüm projeler
+        options = ["Tümü", "Projesi Yok"]
+        for sirket, projeler in SIRKET_PROJE_CONFIG.items():
+            for proje in projeler:
+                options.append(f"{sirket} - {proje}")
+        return options
 
 
 def parse_frontmatter(content: str) -> tuple[dict, str]:
@@ -251,6 +264,10 @@ def get_items_filtered(folder_type: str, proje_filter: str = "Tümü") -> list[d
         return items
     elif proje_filter == "Projesi Yok":
         return [item for item in items if not item.get("proje")]
+    elif proje_filter.endswith(" (Tümü)"):
+        # Şirket bazlı filtreleme
+        sirket = proje_filter.replace(" (Tümü)", "")
+        return [item for item in items if item.get("proje") and item.get("proje").startswith(f"{sirket} - ")]
     else:
         return [item for item in items if item.get("proje") == proje_filter]
 
@@ -739,23 +756,56 @@ else:
             st.caption(TAB_CONFIG[folder]["empty_msg"])
 
     def render_filter(folder_type: str, filter_state_key: str, select_key: str) -> str:
-        proje_options = get_proje_options()
         current_filter = getattr(st.session_state, filter_state_key)
+        filter_level_key = f"{filter_state_key}_level"
+
+        # Filtre seviyesi: None=şirketler, "SIRKET"=projeler
+        if filter_level_key not in st.session_state:
+            st.session_state[filter_level_key] = None
 
         # Kompakt filtre gösterimi
-        filter_label = "Tümü" if current_filter == "Tümü" else current_filter.split(" - ")[-1][:15]
+        if current_filter == "Tümü":
+            filter_label = "Tümü"
+        elif current_filter == "Projesi Yok":
+            filter_label = "Projesi Yok"
+        elif current_filter.endswith(" (Tümü)"):
+            filter_label = current_filter.replace(" (Tümü)", "")
+        else:
+            parts = current_filter.split(" - ")
+            filter_label = parts[-1][:12] if len(parts) > 1 else current_filter[:12]
 
         with st.popover(f"🔽 {filter_label}"):
-            selected_filter = st.radio(
-                "Filtre",
-                options=proje_options,
-                index=proje_options.index(current_filter) if current_filter in proje_options else 0,
-                key=select_key,
-                label_visibility="collapsed"
-            )
-            if selected_filter != current_filter:
-                setattr(st.session_state, filter_state_key, selected_filter)
-                st.rerun()
+            selected_sirket = st.session_state[filter_level_key]
+
+            if selected_sirket is None:
+                # Şirket seçimi
+                sirket_options = get_sirket_options()
+                for opt in sirket_options:
+                    if opt in ["Tümü", "Projesi Yok"]:
+                        if st.button(opt, key=f"{select_key}_{opt}", use_container_width=True):
+                            setattr(st.session_state, filter_state_key, opt)
+                            st.rerun()
+                    else:
+                        proje_sayisi = len(SIRKET_PROJE_CONFIG.get(opt, []))
+                        if st.button(f"{opt} ({proje_sayisi}) →", key=f"{select_key}_{opt}", use_container_width=True):
+                            st.session_state[filter_level_key] = opt
+                            st.rerun()
+            else:
+                # Proje seçimi
+                if st.button("← Geri", key=f"{select_key}_back", use_container_width=True):
+                    st.session_state[filter_level_key] = None
+                    st.rerun()
+
+                st.divider()
+
+                proje_options = get_proje_options(selected_sirket)
+                for opt in proje_options:
+                    display = opt.replace(f"{selected_sirket} - ", "") if " - " in opt else opt
+                    if st.button(display, key=f"{select_key}_{opt}", use_container_width=True):
+                        setattr(st.session_state, filter_state_key, opt)
+                        st.session_state[filter_level_key] = None
+                        st.rerun()
+
         return current_filter
 
     # Tab menü
