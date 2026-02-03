@@ -481,3 +481,102 @@ def get_companies_with_counts() -> list[dict]:
         {"name": sirket, "count": len(projeler)}
         for sirket, projeler in SIRKET_PROJE_CONFIG.items()
     ]
+
+
+# ============================================
+# ERROR LOGGING - Google Drive'a kaydet
+# ============================================
+
+def get_or_create_logs_folder() -> str:
+    """Logs klasörünü al veya oluştur"""
+    service = get_drive_service()
+    folder_ids = get_folder_ids()
+
+    if "logs" in folder_ids:
+        return folder_ids["logs"]
+
+    file_metadata = {
+        'name': 'logs',
+        'mimeType': 'application/vnd.google-apps.folder',
+        'parents': [SHARED_DRIVE_ID]
+    }
+    folder = service.files().create(
+        body=file_metadata,
+        supportsAllDrives=True,
+        fields='id'
+    ).execute()
+
+    # Cache güncelle
+    global _folder_ids_cache
+    if _folder_ids_cache:
+        _folder_ids_cache["logs"] = folder.get('id')
+
+    return folder.get('id')
+
+
+def log_error(error_type: str, message: str, details: dict = None):
+    """Hatayı Drive'daki logs klasörüne kaydet"""
+    try:
+        service = get_drive_service()
+        logs_folder_id = get_or_create_logs_folder()
+
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        date_str = datetime.now().strftime("%Y-%m-%d")
+
+        log_entry = f"""## {timestamp} - {error_type}
+
+**Message:** {message}
+
+"""
+        if details:
+            log_entry += "**Details:**\n```json\n"
+            log_entry += json.dumps(details, indent=2, ensure_ascii=False)
+            log_entry += "\n```\n"
+
+        log_entry += "\n---\n\n"
+
+        # Bugünün log dosyasını bul veya oluştur
+        filename = f"error-log-{date_str}.md"
+
+        # Mevcut dosyayı ara
+        results = service.files().list(
+            q=f"'{logs_folder_id}' in parents and name='{filename}' and trashed=false",
+            fields="files(id)",
+            supportsAllDrives=True,
+            includeItemsFromAllDrives=True
+        ).execute()
+
+        files = results.get('files', [])
+
+        if files:
+            # Mevcut dosyaya ekle
+            file_id = files[0]['id']
+            existing_content = service.files().get_media(fileId=file_id).execute().decode('utf-8')
+            new_content = existing_content + log_entry
+            media = MediaInMemoryUpload(new_content.encode('utf-8'), mimetype='text/markdown')
+            service.files().update(
+                fileId=file_id,
+                media_body=media,
+                supportsAllDrives=True
+            ).execute()
+        else:
+            # Yeni dosya oluştur
+            header = f"# Error Log - {date_str}\n\n"
+            content = header + log_entry
+            media = MediaInMemoryUpload(content.encode('utf-8'), mimetype='text/markdown')
+            file_metadata = {
+                'name': filename,
+                'parents': [logs_folder_id],
+                'mimeType': 'text/markdown'
+            }
+            service.files().create(
+                body=file_metadata,
+                media_body=media,
+                supportsAllDrives=True
+            ).execute()
+
+        return True
+    except Exception as e:
+        # Log yazarken hata olursa sessizce geç
+        print(f"Error logging failed: {e}")
+        return False

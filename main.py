@@ -14,10 +14,40 @@ from services.drive import (
     get_items, get_items_filtered, get_all_counts, get_item_count,
     save_file, move_file, delete_file, update_proje, toggle_pin,
     export_items, get_sirket_options, get_proje_options,
-    get_companies_with_counts, clear_cache, SIRKET_PROJE_CONFIG
+    get_companies_with_counts, clear_cache, SIRKET_PROJE_CONFIG,
+    log_error
 )
 
 app = FastAPI(title="Kişisel Not Defterim API")
+
+
+# Global Exception Handler - Hataları Drive'a logla
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    """Tüm hataları yakala ve Drive'a logla"""
+    error_details = {
+        "url": str(request.url),
+        "method": request.method,
+        "error_type": type(exc).__name__,
+        "error_message": str(exc)
+    }
+
+    # Drive'a logla (arka planda, hata olsa bile devam et)
+    try:
+        log_error(
+            error_type=type(exc).__name__,
+            message=str(exc),
+            details=error_details
+        )
+    except:
+        pass  # Loglama hatası olursa sessizce geç
+
+    # HTTPException ise orijinal yanıtı döndür
+    if isinstance(exc, HTTPException):
+        raise exc
+
+    # Diğer hatalar için 500 döndür
+    raise HTTPException(status_code=500, detail="Internal server error")
 
 # Gzip sıkıştırma (500 byte üzeri yanıtlar için)
 app.add_middleware(GZipMiddleware, minimum_size=500)

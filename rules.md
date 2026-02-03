@@ -11,12 +11,14 @@ alylmz-kisisel-not-defterim/
 ├── requirements-fastapi.txt # FastAPI bağımlılıklar
 ├── requirements.txt        # Streamlit bağımlılıklar (eski)
 ├── render.yaml             # Render.com deployment config
+├── backup_to_icloud.sh     # iCloud yedekleme scripti
+├── com.alylmz.notdefteri.backup.plist  # launchd zamanlayıcı
 ├── run_local.sh            # Lokal geliştirme scripti (git'e dahil değil)
 ├── rules.md                # Bu dosya
 ├── sirketler_projeler.md   # Şirket & Proje indeksi
 ├── services/
 │   ├── __init__.py
-│   └── drive.py            # Google Drive API servisleri
+│   └── drive.py            # Google Drive API servisleri + error logging
 ├── static/
 │   ├── index.html          # SPA frontend (Tailwind + Alpine.js)
 │   └── logo.webp           # Logo kopyası
@@ -32,7 +34,8 @@ aliyilmaz-kisisel-not-defterim/    # Shared Drive ID: 0AFbVhvJLQtOHUk9PVA
 ├── gorevler/                       # ✅ Görevler
 ├── arsiv/                          # 📦 Arşiv (tamamlanan görevler)
 ├── cop_kutusu/                     # 🗑️ Çöp kutusu (silinen öğeler)
-└── export/                         # 📤 Export dosyaları
+├── export/                         # 📤 Export dosyaları
+└── logs/                           # 🔴 Hata logları (otomatik)
 ```
 
 ## Mimari
@@ -608,6 +611,57 @@ uvicorn main:app --reload --port 8510
 ```
 
 **URL:** http://localhost:8510?key=1102
+
+## Error Logging
+
+Tüm hatalar otomatik olarak Google Drive'daki `logs/` klasörüne kaydedilir.
+
+**Dosya formatı:** `error-log-YYYY-MM-DD.md`
+
+```python
+# services/drive.py
+log_error(error_type, message, details)
+
+# main.py - Global exception handler
+@app.exception_handler(Exception)
+async def global_exception_handler(request, exc):
+    log_error(type(exc).__name__, str(exc), {...})
+```
+
+**Log içeriği:**
+- Tarih/saat
+- Hata tipi
+- Hata mesajı
+- URL ve method
+- Detaylar (JSON)
+
+## iCloud Yedekleme
+
+Google Drive'dan iCloud'a otomatik sync:
+
+**Script:** `backup_to_icloud.sh`
+```bash
+# Manuel çalıştır
+./backup_to_icloud.sh
+
+# Otomatik (her 30 dk)
+cp com.alylmz.notdefteri.backup.plist ~/Library/LaunchAgents/
+launchctl load ~/Library/LaunchAgents/com.alylmz.notdefteri.backup.plist
+```
+
+**Sync edilen klasörler:**
+- inbox/ → iCloud/inbox/
+- notlar/ → iCloud/notlar/
+- gorevler/ → iCloud/gorevler/
+- arsiv/ → iCloud/arsiv/
+- export/ → iCloud/export/
+- logs/ → iCloud/logs/
+
+**Dizinler:**
+```
+Google Drive: /Users/alylmztr/Library/CloudStorage/GoogleDrive-.../alylmz-kisisel-not-defterim/
+iCloud:       /Users/alylmztr/Library/Mobile Documents/com~apple~CloudDocs/alylmz-kisisel-not-defterim/
+```
 
 ## Git İşlemleri
 
