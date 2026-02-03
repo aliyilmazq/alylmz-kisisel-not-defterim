@@ -522,15 +522,21 @@
 
                 async quickSave() {
                     if (!this.quickNote.trim()) return;
-                    try {
-                        const lines = this.quickNote.trim().split('\n');
-                        const title = lines[0].substring(0, 100);
-                        const content = lines.slice(1).join('\n').trim();
-                        await this.api('POST', '/api/items', { title, content, folder: 'inbox' });
-                        this.quickNote = '';
-                        await this.loadCounts();
-                        if (this.activeTab === 'inbox') await this.loadItems();
-                    } catch (e) { console.error('Quick save error:', e); }
+                    const lines = this.quickNote.trim().split('\n');
+                    const title = lines[0].substring(0, 100);
+                    const content = lines.slice(1).join('\n').trim();
+
+                    // Optimistic UI
+                    this.quickNote = '';
+                    this.counts.inbox = (this.counts.inbox || 0) + 1;
+                    if (this.activeTab === 'inbox') {
+                        this.items.unshift({ id: 'temp_' + Date.now(), title, content, pinned: false, proje: null, created: new Date().toISOString().split('T')[0] });
+                    }
+
+                    // API çağrısı arka planda, sonra gerçek ID ile güncelle
+                    this.api('POST', '/api/items', { title, content, folder: 'inbox' })
+                        .then(() => { if (this.activeTab === 'inbox') this.loadItems(); })
+                        .catch(e => { console.error('Quick save error:', e); this.loadItems(); this.loadCounts(); });
                 },
 
                 // ============ CARD ACTIONS (Tek Kaynak) ============
@@ -553,21 +559,32 @@
                 },
 
                 async moveItem(item, toFolder) {
-                    await this.api('POST', `/api/items/${item.id}/move`, { from_folder: this.activeTab, to_folder: toFolder });
-                    await this.loadCounts();
-                    await this.loadItems();
+                    // Optimistic UI: Hemen listeden kaldır
+                    this.items = this.items.filter(i => i.id !== item.id);
+                    this.counts[this.activeTab] = Math.max(0, (this.counts[this.activeTab] || 1) - 1);
+                    this.counts[toFolder] = (this.counts[toFolder] || 0) + 1;
+                    // API çağrısı arka planda
+                    this.api('POST', `/api/items/${item.id}/move`, { from_folder: this.activeTab, to_folder: toFolder })
+                        .catch(e => { console.error('Move error:', e); this.loadItems(); });
                 },
 
                 async deleteItem(item) {
                     if (!confirm('Silmek istediğinize emin misiniz?')) return;
-                    await this.api('DELETE', `/api/items/${item.id}?folder=${this.activeTab}`);
-                    await this.loadCounts();
-                    await this.loadItems();
+                    // Optimistic UI: Hemen listeden kaldır
+                    this.items = this.items.filter(i => i.id !== item.id);
+                    this.counts[this.activeTab] = Math.max(0, (this.counts[this.activeTab] || 1) - 1);
+                    // API çağrısı arka planda
+                    this.api('DELETE', `/api/items/${item.id}?folder=${this.activeTab}`)
+                        .catch(e => { console.error('Delete error:', e); this.loadItems(); });
                 },
 
                 async togglePin(item) {
-                    await this.api('POST', `/api/items/${item.id}/pin?folder=${this.activeTab}`);
-                    await this.loadItems();
+                    // Optimistic UI: Hemen toggle et ve sırala
+                    item.pinned = !item.pinned;
+                    this.items = [...this.items].sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0));
+                    // API çağrısı arka planda
+                    this.api('POST', `/api/items/${item.id}/pin?folder=${this.activeTab}`)
+                        .catch(e => { console.error('Pin error:', e); this.loadItems(); });
                 },
 
                 // ============ MODALS ============
@@ -578,21 +595,30 @@
                 },
 
                 async saveItem() {
-                    try {
-                        if (this.editingItem) {
-                            await this.api('PUT', `/api/items/${this.editingItem.id}?folder=${this.activeTab}`, {
-                                title: this.formData.title,
-                                content: this.formData.content,
-                                proje: this.editingItem.proje,
-                                pinned: this.editingItem.pinned || false
-                            });
-                        } else {
-                            await this.api('POST', '/api/items', this.formData);
+                    if (this.editingItem) {
+                        // Optimistic UI: Hemen güncelle
+                        const item = this.items.find(i => i.id === this.editingItem.id);
+                        if (item) {
+                            item.title = this.formData.title;
+                            item.content = this.formData.content;
                         }
                         this.showModal = false;
-                        await this.loadCounts();
-                        await this.loadItems();
-                    } catch (e) { console.error('Save error:', e); }
+                        // API çağrısı arka planda
+                        this.api('PUT', `/api/items/${this.editingItem.id}?folder=${this.activeTab}`, {
+                            title: this.formData.title,
+                            content: this.formData.content,
+                            proje: this.editingItem.proje,
+                            pinned: this.editingItem.pinned || false
+                        }).catch(e => { console.error('Save error:', e); this.loadItems(); });
+                    } else {
+                        // Yeni öğe için API beklenmeli
+                        try {
+                            await this.api('POST', '/api/items', this.formData);
+                            this.showModal = false;
+                            this.loadCounts();
+                            if (this.activeTab === this.formData.folder) this.loadItems();
+                        } catch (e) { console.error('Save error:', e); }
+                    }
                 },
 
                 openProjeModal(item) {
@@ -607,11 +633,13 @@
                 },
 
                 async setProje(proje) {
-                    try {
-                        await this.api('POST', `/api/items/${this.projeItem.id}/proje`, { folder: this.activeTab, proje });
-                        this.closeProjeModal();
-                        await this.loadItems();
-                    } catch (e) { console.error('Proje error:', e); }
+                    // Optimistic UI: Hemen güncelle
+                    const item = this.items.find(i => i.id === this.projeItem.id);
+                    if (item) item.proje = proje;
+                    this.closeProjeModal();
+                    // API çağrısı arka planda
+                    this.api('POST', `/api/items/${this.projeItem.id}/proje`, { folder: this.activeTab, proje })
+                        .catch(e => { console.error('Proje error:', e); this.loadItems(); });
                 },
 
                 async exportItems() {
