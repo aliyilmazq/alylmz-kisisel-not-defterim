@@ -1,0 +1,448 @@
+"""
+Google Drive API Service
+Tüm Drive işlemleri bu modülde
+"""
+import os
+import json
+from google.oauth2 import service_account
+from googleapiclient.discovery import build
+from googleapiclient.http import MediaInMemoryUpload
+from google.auth.transport.requests import AuthorizedSession
+from datetime import datetime
+from functools import lru_cache
+
+# Config
+SCOPES = ['https://www.googleapis.com/auth/drive']
+SHARED_DRIVE_ID = "0AFbVhvJLQtOHUk9PVA"
+
+# Şirket ve Proje Konfigürasyonu
+SIRKET_PROJE_CONFIG = {
+    "ENVEX": [
+        "BHP Escondida Sözleşme Yönetimi",
+        "ABD ENVEX Satış Ağı",
+        "Kazakistan ENVEX Satış Ağı",
+        "Satış Ekibi Yapılanması",
+        "Umman ENVEX Satış Ağı",
+        "Kuveyt ENVEX Satış Ağı",
+        "WIPO ENVEX Raporlama Süreci",
+        "Kurumsal Kimlik",
+        "ABD ENVEX Relocation Projesi",
+        "ENVEX-COREX Ortaklık Görüşmeleri",
+        "ENVEX Yatırımcı Sunum Dosyası",
+        "ENVEX Sözleşme Yönetimi Eğitimi",
+    ],
+    "COREX": [
+        "Corpus Christi Güneş Enerjisi Santrali",
+        "Corpus Christi Bakır Geri Dönüşüm Tesisi",
+        "ENVEX - COREX Ortaklık Projesi",
+    ],
+    "TIS": [
+        "Satış Süreç Yönetimi Projesi",
+        "Resmi İlişkiler Yönetimi Projesi",
+        "Kültürel Dönüşüm Projesi",
+        "İmalat Tasarım Dijitalleşme Projesi",
+        "İslam Kalkınma Bankası İşbirliği",
+        "Kazakistan Yapılanması",
+        "EBRD Projesi",
+    ],
+    "MIM": [
+        "Kore KEXIM Tedarik Zinciri Finansmanı Projesi",
+    ],
+    "TEMROB": [
+        "Ankara Teknopark Akıllı Ayna Projesi",
+        "Ankara Teknopark Yapay Zeka Finansal Yazılım Projesi",
+    ],
+    "PULCHRANI": [
+        "Shopify Eticaret Platformu Geliştirme Projesi",
+        "ETSY Eticaret Platformu Geliştirme Projesi",
+    ],
+    "ALI YILMAZ": [
+        "CAPITAL ONE US Kredi Kartı",
+        "BOFA US Kredi Kartı",
+        "BOFA US Banka Kartı",
+        "CHASE US Kredi Kartı",
+        "EQUIFAX Kredi Bürosu İletişimi",
+        "NAV Kredi Skoru Projesi",
+        "TOMO Kredi Skoru Projesi",
+    ],
+    "EPIOQN": [
+        "EQONE Akıllı Ayna Ürün Geliştirme Projesi",
+    ],
+    "PULPO": [
+        "Debt Finance Projesi",
+        "Convertible Note Yatırımı Projesi",
+    ],
+    "OZMEN": [
+        "Manisa JES Satış Süreci Projesi",
+    ],
+}
+
+FOLDER_CONFIG = {
+    "inbox": "inbox",
+    "notlar": "notlar",
+    "gorevler": "gorevler",
+    "arsiv": "arsiv",
+    "cop_kutusu": "cop_kutusu",
+}
+
+# Drive Service Singleton
+_drive_service = None
+_folder_ids_cache = None
+
+
+def get_credentials():
+    """Environment'tan credentials al"""
+    creds_json = os.environ.get("GCP_CREDENTIALS")
+    if creds_json:
+        creds_info = json.loads(creds_json)
+        return service_account.Credentials.from_service_account_info(creds_info, scopes=SCOPES)
+    raise ValueError("GCP_CREDENTIALS environment variable not set")
+
+
+def get_drive_service():
+    """Google Drive API servisi - singleton"""
+    global _drive_service
+    if _drive_service is None:
+        credentials = get_credentials()
+        authed_session = AuthorizedSession(credentials)
+
+        class RequestsHttpAdapter:
+            def __init__(self, session):
+                self.session = session
+
+            def request(self, uri, method='GET', body=None, headers=None, **kwargs):
+                response = self.session.request(method, uri, data=body, headers=headers)
+                return type('Response', (), {
+                    'status': response.status_code,
+                    'reason': response.reason
+                })(), response.content
+
+        _drive_service = build('drive', 'v3', http=RequestsHttpAdapter(authed_session))
+    return _drive_service
+
+
+def get_folder_ids() -> dict:
+    """Alt klasör ID'lerini al - cached"""
+    global _folder_ids_cache
+    if _folder_ids_cache is None:
+        service = get_drive_service()
+        results = service.files().list(
+            q=f"'{SHARED_DRIVE_ID}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false",
+            fields="files(id, name)",
+            supportsAllDrives=True,
+            includeItemsFromAllDrives=True,
+            corpora="drive",
+            driveId=SHARED_DRIVE_ID
+        ).execute()
+
+        _folder_ids_cache = {}
+        for folder in results.get('files', []):
+            _folder_ids_cache[folder['name']] = folder['id']
+    return _folder_ids_cache
+
+
+def clear_cache():
+    """Cache'i temizle"""
+    global _folder_ids_cache
+    _folder_ids_cache = None
+
+
+def parse_frontmatter(content: str) -> tuple[dict, str]:
+    """Frontmatter ve içeriği ayır"""
+    frontmatter = {"proje": None, "created": None, "pinned": False}
+    body = content
+
+    if content.startswith("---"):
+        parts = content.split("---", 2)
+        if len(parts) >= 3:
+            fm_text = parts[1].strip()
+            body = parts[2].strip()
+
+            for line in fm_text.split("\n"):
+                if ":" in line:
+                    key, value = line.split(":", 1)
+                    key = key.strip()
+                    value = value.strip().strip('"').strip("'")
+                    if key == "pinned":
+                        frontmatter[key] = value.lower() == "true"
+                    elif value.lower() in ("null", "none", ""):
+                        frontmatter[key] = None if key != "pinned" else False
+                    elif key in frontmatter:
+                        frontmatter[key] = value
+
+    return frontmatter, body
+
+
+def create_frontmatter(proje: str = None, pinned: bool = False) -> str:
+    """Yeni frontmatter oluştur"""
+    today = datetime.now().strftime("%Y-%m-%d")
+    proje_str = f'"{proje}"' if proje else "null"
+    pinned_str = "true" if pinned else "false"
+    return f"""---
+proje: {proje_str}
+created: {today}
+pinned: {pinned_str}
+---"""
+
+
+def parse_body(body: str, fallback_title: str = "") -> tuple[str, str]:
+    """Body'den başlık ve içerik ayır"""
+    lines = body.split("\n")
+    title = lines[0].replace("# ", "").strip() if lines and lines[0].strip() else fallback_title
+    content = "\n".join(lines[1:]).strip() if len(lines) > 1 else ""
+    return title, content
+
+
+def get_items(folder_type: str) -> list[dict]:
+    """Google Drive'dan dosyaları çek"""
+    service = get_drive_service()
+    folder_ids = get_folder_ids()
+
+    if folder_type not in folder_ids:
+        return []
+
+    folder_id = folder_ids[folder_type]
+    items = []
+
+    results = service.files().list(
+        q=f"'{folder_id}' in parents and trashed=false",
+        fields="files(id, name, modifiedTime)",
+        orderBy="modifiedTime desc",
+        supportsAllDrives=True,
+        includeItemsFromAllDrives=True
+    ).execute()
+
+    for file in results.get('files', []):
+        content = service.files().get_media(fileId=file['id']).execute().decode('utf-8')
+        frontmatter, body = parse_frontmatter(content)
+        title, body_content = parse_body(body, file['name'].replace('.md', ''))
+
+        items.append({
+            "id": file['id'],
+            "filename": file['name'],
+            "title": title,
+            "content": body_content,
+            "proje": frontmatter.get("proje"),
+            "created": frontmatter.get("created"),
+            "modified": file['modifiedTime'],
+            "pinned": frontmatter.get("pinned", False),
+        })
+
+    # Sabitlenmiş öğeler üstte
+    items.sort(key=lambda x: (not x.get("pinned", False)))
+    return items
+
+
+def get_item_count(folder_type: str) -> int:
+    """Klasördeki dosya sayısını hızlıca al"""
+    service = get_drive_service()
+    folder_ids = get_folder_ids()
+
+    if folder_type not in folder_ids:
+        return 0
+
+    results = service.files().list(
+        q=f"'{folder_ids[folder_type]}' in parents and trashed=false",
+        fields="files(id)",
+        supportsAllDrives=True,
+        includeItemsFromAllDrives=True
+    ).execute()
+
+    return len(results.get('files', []))
+
+
+def get_all_counts() -> dict:
+    """Tüm klasörlerin sayıları"""
+    return {
+        "inbox": get_item_count("inbox"),
+        "notlar": get_item_count("notlar"),
+        "gorevler": get_item_count("gorevler"),
+        "arsiv": get_item_count("arsiv"),
+        "cop_kutusu": get_item_count("cop_kutusu"),
+    }
+
+
+def get_items_filtered(folder_type: str, proje_filter: str = "Tümü") -> list[dict]:
+    """Projeye göre filtrelenmiş öğeler"""
+    items = get_items(folder_type)
+    if proje_filter == "Tümü":
+        return items
+    elif proje_filter == "Projesi Yok":
+        return [item for item in items if not item.get("proje")]
+    elif proje_filter.endswith(" (Tümü)"):
+        sirket = proje_filter.replace(" (Tümü)", "")
+        return [item for item in items if item.get("proje") and item.get("proje").startswith(f"{sirket} - ")]
+    else:
+        return [item for item in items if item.get("proje") == proje_filter]
+
+
+def save_file(title: str, content: str, folder_type: str, proje: str = None, file_id: str = None, pinned: bool = False):
+    """Dosya kaydet veya güncelle"""
+    service = get_drive_service()
+    folder_ids = get_folder_ids()
+
+    frontmatter = create_frontmatter(proje, pinned)
+    md_content = f"{frontmatter}\n\n# {title}\n\n{content}"
+
+    media = MediaInMemoryUpload(md_content.encode('utf-8'), mimetype='text/markdown')
+
+    if file_id:
+        service.files().update(
+            fileId=file_id,
+            media_body=media,
+            supportsAllDrives=True
+        ).execute()
+        return file_id
+    else:
+        date_prefix = datetime.now().strftime("%Y-%m-%d")
+        safe_title = "".join(c if c.isalnum() or c in (' ', '-', '_') else '_' for c in title)
+        safe_title = safe_title[:50].strip().replace(" ", "-").lower()
+        filename = f"{date_prefix}-{safe_title}.md"
+
+        file_metadata = {
+            'name': filename,
+            'parents': [folder_ids[folder_type]],
+            'mimeType': 'text/markdown'
+        }
+        result = service.files().create(
+            body=file_metadata,
+            media_body=media,
+            supportsAllDrives=True
+        ).execute()
+        return result.get('id')
+
+
+def move_file(file_id: str, from_folder: str, to_folder: str):
+    """Dosyayı klasörler arası taşı"""
+    service = get_drive_service()
+    folder_ids = get_folder_ids()
+
+    service.files().update(
+        fileId=file_id,
+        addParents=folder_ids[to_folder],
+        removeParents=folder_ids[from_folder],
+        supportsAllDrives=True
+    ).execute()
+
+
+def delete_file(file_id: str, folder_type: str):
+    """Dosyayı çöp kutusuna taşı veya kalıcı sil"""
+    service = get_drive_service()
+
+    if folder_type == "cop_kutusu":
+        service.files().delete(fileId=file_id, supportsAllDrives=True).execute()
+    else:
+        move_file(file_id, folder_type, "cop_kutusu")
+
+
+def update_proje(file_id: str, folder_type: str, proje: str):
+    """Dosyanın projesini güncelle"""
+    service = get_drive_service()
+
+    content = service.files().get_media(fileId=file_id).execute().decode('utf-8')
+    frontmatter, body = parse_frontmatter(content)
+    title, body_content = parse_body(body)
+
+    save_file(title, body_content, folder_type, proje, file_id, frontmatter.get("pinned", False))
+
+
+def toggle_pin(file_id: str, folder_type: str) -> bool:
+    """Dosyanın sabitleme durumunu değiştir, yeni durumu döndür"""
+    service = get_drive_service()
+
+    content = service.files().get_media(fileId=file_id).execute().decode('utf-8')
+    frontmatter, body = parse_frontmatter(content)
+    title, body_content = parse_body(body)
+
+    new_pinned = not frontmatter.get("pinned", False)
+    save_file(title, body_content, folder_type, frontmatter.get("proje"), file_id, new_pinned)
+    return new_pinned
+
+
+def get_or_create_export_folder() -> str:
+    """Export klasörünü al veya oluştur"""
+    service = get_drive_service()
+    folder_ids = get_folder_ids()
+
+    if "export" in folder_ids:
+        return folder_ids["export"]
+
+    file_metadata = {
+        'name': 'export',
+        'mimeType': 'application/vnd.google-apps.folder',
+        'parents': [SHARED_DRIVE_ID]
+    }
+    folder = service.files().create(
+        body=file_metadata,
+        supportsAllDrives=True,
+        fields='id'
+    ).execute()
+
+    return folder.get('id')
+
+
+def export_items(items: list[dict], export_name: str) -> str:
+    """Öğeleri tek bir markdown dosyasına export et"""
+    service = get_drive_service()
+    export_folder_id = get_or_create_export_folder()
+
+    today = datetime.now().strftime("%Y-%m-%d %H:%M")
+    content_lines = [f"# Export: {export_name}", f"Tarih: {today}", f"Toplam: {len(items)} öğe", "", "---", ""]
+
+    for item in items:
+        pinned_mark = "📌 " if item.get('pinned') else ""
+        proje_mark = f" 📁 {item.get('proje')}" if item.get('proje') else ""
+        content_lines.append(f"## {pinned_mark}{item['title']}{proje_mark}")
+        content_lines.append("")
+        if item.get('content'):
+            content_lines.append(item['content'])
+            content_lines.append("")
+        content_lines.append("---")
+        content_lines.append("")
+
+    md_content = "\n".join(content_lines)
+
+    safe_name = "".join(c if c.isalnum() or c in (' ', '-', '_') else '_' for c in export_name)
+    filename = f"export-{datetime.now().strftime('%Y%m%d-%H%M')}-{safe_name[:30]}.md"
+
+    media = MediaInMemoryUpload(md_content.encode('utf-8'), mimetype='text/markdown')
+    file_metadata = {
+        'name': filename,
+        'parents': [export_folder_id],
+        'mimeType': 'text/markdown'
+    }
+    service.files().create(
+        body=file_metadata,
+        media_body=media,
+        supportsAllDrives=True
+    ).execute()
+
+    return filename
+
+
+def get_sirket_options() -> list[str]:
+    """Şirket listesi"""
+    return ["Tümü", "Projesi Yok"] + list(SIRKET_PROJE_CONFIG.keys())
+
+
+def get_proje_options(sirket: str = None) -> list[str]:
+    """Proje seçenekleri"""
+    if sirket and sirket in SIRKET_PROJE_CONFIG:
+        options = [f"{sirket} (Tümü)"]
+        for proje in SIRKET_PROJE_CONFIG[sirket]:
+            options.append(f"{sirket} - {proje}")
+        return options
+    else:
+        options = ["Tümü", "Projesi Yok"]
+        for sirket, projeler in SIRKET_PROJE_CONFIG.items():
+            for proje in projeler:
+                options.append(f"{sirket} - {proje}")
+        return options
+
+
+def get_companies_with_counts() -> list[dict]:
+    """Şirketler ve proje sayıları"""
+    return [
+        {"name": sirket, "count": len(projeler)}
+        for sirket, projeler in SIRKET_PROJE_CONFIG.items()
+    ]

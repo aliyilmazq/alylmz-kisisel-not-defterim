@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: kisisel-not-defterim
+    runtime: python
+    buildCommand: pip install -r requirements-fastapi.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: APP_SECRET_KEY
+        sync: false
+      - key: GCP_CREDENTIALS
+        sync: false

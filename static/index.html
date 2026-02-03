@@ -1,0 +1,642 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <title>Kişisel Not Defterim</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        * { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; }
+        body {
+            padding-top: env(safe-area-inset-top);
+            padding-bottom: env(safe-area-inset-bottom);
+            -webkit-tap-highlight-color: transparent;
+        }
+        .tab-active { background: #3b82f6; color: white; }
+        .tab-inactive { background: #f3f4f6; color: #374151; }
+        [x-cloak] { display: none !important; }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen" x-data="app()" x-init="init()">
+
+    <!-- Login Screen -->
+    <div x-show="!authenticated" x-cloak class="min-h-screen flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl shadow-lg p-6 w-full max-w-sm">
+            <div class="text-center mb-6">
+                <img src="/static/logo.webp" alt="BEIREK" class="h-16 mx-auto mb-4">
+                <h1 class="text-xl font-semibold text-gray-800">Kişisel Not Defterim</h1>
+            </div>
+            <form @submit.prevent="login()">
+                <input
+                    type="password"
+                    x-model="loginKey"
+                    placeholder="Erişim anahtarı"
+                    class="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 mb-4"
+                    autofocus
+                >
+                <button
+                    type="submit"
+                    class="w-full bg-blue-500 text-white py-3 rounded-xl font-medium hover:bg-blue-600 transition"
+                >
+                    Giriş
+                </button>
+                <p x-show="loginError" class="text-red-500 text-sm text-center mt-3" x-text="loginError"></p>
+            </form>
+        </div>
+    </div>
+
+    <!-- Main App -->
+    <div x-show="authenticated" x-cloak class="pb-4">
+
+        <!-- Header -->
+        <div class="bg-white border-b border-gray-200 px-4 py-3 sticky top-0 z-40">
+            <div class="flex items-center justify-between">
+                <img src="/static/logo.webp" alt="BEIREK" class="h-10">
+                <div class="flex items-center gap-2">
+                    <button
+                        @click="refreshData()"
+                        class="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition"
+                        title="Yenile"
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                        </svg>
+                    </button>
+                    <button
+                        @click="openNewModal()"
+                        class="bg-blue-500 text-white px-4 py-2 rounded-xl font-medium text-sm hover:bg-blue-600 transition flex items-center gap-1"
+                    >
+                        <span class="text-lg leading-none">+</span> Yeni
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tabs -->
+        <div class="px-4 py-3 overflow-x-auto">
+            <div class="flex gap-1 min-w-max">
+                <template x-for="tab in tabs" :key="tab.id">
+                    <button
+                        @click="activeTab = tab.id; loadItems()"
+                        :class="activeTab === tab.id ? 'tab-active' : 'tab-inactive'"
+                        class="px-3 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition"
+                    >
+                        <span x-text="tab.icon"></span>
+                        <span x-text="tab.label"></span>
+                        <span class="ml-1 opacity-75" x-text="'(' + (counts[tab.id] || 0) + ')'"></span>
+                    </button>
+                </template>
+            </div>
+        </div>
+
+        <!-- Filter & Export (for notlar and gorevler) -->
+        <div x-show="activeTab === 'notlar' || activeTab === 'gorevler'" class="px-4 pb-3">
+            <div class="flex items-center gap-2">
+                <div class="relative flex-1" x-data="{ open: false }">
+                    <button
+                        @click="open = !open"
+                        class="w-full flex items-center justify-between px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm"
+                    >
+                        <span x-text="currentFilter"></span>
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                        </svg>
+                    </button>
+
+                    <!-- Filter Dropdown -->
+                    <div
+                        x-show="open"
+                        @click.away="open = false"
+                        class="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-50 max-h-64 overflow-y-auto"
+                    >
+                        <!-- Level 1: Companies -->
+                        <template x-if="!filterCompany">
+                            <div>
+                                <button @click="setFilter('Tümü'); open = false" class="w-full px-3 py-2 text-left text-sm hover:bg-gray-50">Tümü</button>
+                                <button @click="setFilter('Projesi Yok'); open = false" class="w-full px-3 py-2 text-left text-sm hover:bg-gray-50">Projesi Yok</button>
+                                <div class="border-t border-gray-100"></div>
+                                <template x-for="company in companies" :key="company.name">
+                                    <button
+                                        @click="filterCompany = company.name"
+                                        class="w-full px-3 py-2 text-left text-sm hover:bg-gray-50 flex justify-between items-center"
+                                    >
+                                        <span x-text="company.name"></span>
+                                        <span class="text-gray-400 text-xs" x-text="'(' + company.count + ') →'"></span>
+                                    </button>
+                                </template>
+                            </div>
+                        </template>
+
+                        <!-- Level 2: Projects -->
+                        <template x-if="filterCompany">
+                            <div>
+                                <button @click="filterCompany = null" class="w-full px-3 py-2 text-left text-sm hover:bg-gray-50 text-blue-500">← Geri</button>
+                                <button @click="setFilter(filterCompany + ' (Tümü)'); filterCompany = null; open = false" class="w-full px-3 py-2 text-left text-sm hover:bg-gray-50 font-medium" x-text="filterCompany + ' (Tümü)'"></button>
+                                <div class="border-t border-gray-100"></div>
+                                <template x-for="project in getProjects(filterCompany)" :key="project">
+                                    <button
+                                        @click="setFilter(filterCompany + ' - ' + project); filterCompany = null; open = false"
+                                        class="w-full px-3 py-2 text-left text-sm hover:bg-gray-50"
+                                        x-text="project"
+                                    ></button>
+                                </template>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+
+                <button
+                    @click="exportItems()"
+                    class="p-2 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition"
+                    title="Export"
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                    </svg>
+                </button>
+            </div>
+        </div>
+
+        <!-- Loading -->
+        <div x-show="loading" class="px-4 py-8 text-center text-gray-500">
+            Yükleniyor...
+        </div>
+
+        <!-- Items -->
+        <div x-show="!loading" class="px-4 space-y-3">
+            <template x-if="items.length === 0">
+                <p class="text-center text-gray-400 py-8">Henüz öğe yok</p>
+            </template>
+
+            <template x-for="item in items" :key="item.id">
+                <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                    <!-- Card Header -->
+                    <div class="px-4 py-3 border-b border-gray-100">
+                        <div class="flex items-start gap-2">
+                            <span x-show="item.pinned" class="text-sm">📌</span>
+                            <h3 class="font-medium text-gray-800 flex-1" x-text="item.title"></h3>
+                            <span x-show="item.proje" class="text-xs text-gray-400">📁</span>
+                        </div>
+                        <p x-show="item.proje" class="text-xs text-blue-500 mt-1" x-text="item.proje"></p>
+                    </div>
+
+                    <!-- Card Body -->
+                    <div x-show="item.content" class="px-4 py-2">
+                        <p class="text-sm text-gray-600 line-clamp-2" x-text="item.content"></p>
+                    </div>
+
+                    <!-- Card Actions -->
+                    <div class="px-2 py-2 bg-gray-50 flex flex-wrap gap-1">
+                        <!-- Inbox Actions -->
+                        <template x-if="activeTab === 'inbox'">
+                            <div class="flex gap-1">
+                                <button @click="moveItem(item, 'notlar')" class="action-btn" title="Not'a taşı">📝</button>
+                                <button @click="moveItem(item, 'gorevler')" class="action-btn" title="Görev'e taşı">✅</button>
+                                <button @click="openEditModal(item)" class="action-btn" title="Düzenle">✏️</button>
+                                <button @click="deleteItem(item)" class="action-btn" title="Sil">🗑️</button>
+                            </div>
+                        </template>
+
+                        <!-- Notlar Actions -->
+                        <template x-if="activeTab === 'notlar'">
+                            <div class="flex gap-1">
+                                <button @click="togglePin(item)" class="action-btn" :title="item.pinned ? 'Sabitlemeyi kaldır' : 'Sabitle'">📌</button>
+                                <button @click="moveItem(item, 'inbox')" class="action-btn" title="Gelen'e taşı">📥</button>
+                                <button @click="moveItem(item, 'gorevler')" class="action-btn" title="Görev'e taşı">✅</button>
+                                <button @click="openProjeModal(item)" class="action-btn" title="Proje ata">📁</button>
+                                <button @click="openEditModal(item)" class="action-btn" title="Düzenle">✏️</button>
+                                <button @click="deleteItem(item)" class="action-btn" title="Sil">🗑️</button>
+                            </div>
+                        </template>
+
+                        <!-- Gorevler Actions -->
+                        <template x-if="activeTab === 'gorevler'">
+                            <div class="flex gap-1">
+                                <button @click="togglePin(item)" class="action-btn" :title="item.pinned ? 'Sabitlemeyi kaldır' : 'Sabitle'">📌</button>
+                                <button @click="moveItem(item, 'arsiv')" class="action-btn" title="Tamamla">✔️</button>
+                                <button @click="moveItem(item, 'notlar')" class="action-btn" title="Not'a taşı">📝</button>
+                                <button @click="moveItem(item, 'inbox')" class="action-btn" title="Gelen'e taşı">📥</button>
+                                <button @click="openProjeModal(item)" class="action-btn" title="Proje ata">📁</button>
+                                <button @click="openEditModal(item)" class="action-btn" title="Düzenle">✏️</button>
+                                <button @click="deleteItem(item)" class="action-btn" title="Sil">🗑️</button>
+                            </div>
+                        </template>
+
+                        <!-- Arsiv Actions -->
+                        <template x-if="activeTab === 'arsiv'">
+                            <div class="flex gap-1">
+                                <button @click="moveItem(item, 'gorevler')" class="action-btn" title="Geri al">↩️</button>
+                                <button @click="deleteItem(item)" class="action-btn" title="Sil">🗑️</button>
+                            </div>
+                        </template>
+
+                        <!-- Cop Kutusu Actions -->
+                        <template x-if="activeTab === 'cop_kutusu'">
+                            <div class="flex gap-1">
+                                <button @click="moveItem(item, 'inbox')" class="action-btn" title="Geri al">↩️</button>
+                                <button @click="deleteItem(item)" class="action-btn text-red-500" title="Kalıcı sil">🗑️</button>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+            </template>
+        </div>
+    </div>
+
+    <!-- New/Edit Modal -->
+    <div
+        x-show="showModal"
+        x-cloak
+        class="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center"
+        @click.self="showModal = false"
+    >
+        <div class="bg-white w-full sm:max-w-lg sm:rounded-2xl rounded-t-2xl max-h-[90vh] overflow-y-auto">
+            <div class="p-4 border-b border-gray-200 flex items-center justify-between">
+                <h2 class="text-lg font-semibold" x-text="editingItem ? 'Düzenle' : 'Yeni Ekle'"></h2>
+                <button @click="showModal = false" class="text-gray-400 hover:text-gray-600">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                </button>
+            </div>
+
+            <form @submit.prevent="saveItem()" class="p-4 space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Başlık</label>
+                    <input
+                        type="text"
+                        x-model="formData.title"
+                        class="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        required
+                    >
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">İçerik</label>
+                    <textarea
+                        x-model="formData.content"
+                        rows="4"
+                        class="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                    ></textarea>
+                </div>
+
+                <div x-show="!editingItem">
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Klasör</label>
+                    <select
+                        x-model="formData.folder"
+                        class="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                        <option value="inbox">📥 Gelen Kutusu</option>
+                        <option value="notlar">📝 Notlar</option>
+                        <option value="gorevler">✅ Görevler</option>
+                    </select>
+                </div>
+
+                <button
+                    type="submit"
+                    class="w-full bg-blue-500 text-white py-3 rounded-xl font-medium hover:bg-blue-600 transition"
+                >
+                    Kaydet
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Proje Modal -->
+    <div
+        x-show="showProjeModal"
+        x-cloak
+        class="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center"
+        @click.self="showProjeModal = false"
+    >
+        <div class="bg-white w-full sm:max-w-lg sm:rounded-2xl rounded-t-2xl max-h-[90vh] overflow-y-auto">
+            <div class="p-4 border-b border-gray-200 flex items-center justify-between">
+                <h2 class="text-lg font-semibold">Proje Seç</h2>
+                <button @click="showProjeModal = false" class="text-gray-400 hover:text-gray-600">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                </button>
+            </div>
+
+            <div class="p-2">
+                <button
+                    @click="setProje(null)"
+                    class="w-full px-4 py-3 text-left hover:bg-gray-50 rounded-lg text-gray-500"
+                >
+                    Proje Yok
+                </button>
+
+                <template x-for="company in companies" :key="company.name">
+                    <div>
+                        <div class="px-4 py-2 text-xs font-semibold text-gray-400 uppercase mt-2" x-text="company.name"></div>
+                        <template x-for="project in getProjects(company.name)" :key="project">
+                            <button
+                                @click="setProje(company.name + ' - ' + project)"
+                                class="w-full px-4 py-3 text-left hover:bg-gray-50 rounded-lg text-sm"
+                                x-text="project"
+                            ></button>
+                        </template>
+                    </div>
+                </template>
+            </div>
+        </div>
+    </div>
+
+    <style>
+        .action-btn {
+            padding: 0.5rem 0.75rem;
+            font-size: 0.875rem;
+            background: white;
+            border: 1px solid #e5e7eb;
+            border-radius: 0.5rem;
+            transition: all 0.15s;
+        }
+        .action-btn:hover {
+            background: #f3f4f6;
+        }
+        .line-clamp-2 {
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+    </style>
+
+    <script>
+        function app() {
+            return {
+                // Auth
+                authenticated: false,
+                loginKey: '',
+                loginError: '',
+                apiKey: '',
+
+                // Data
+                tabs: [
+                    { id: 'inbox', label: 'Gelen', icon: '📥' },
+                    { id: 'notlar', label: 'Not', icon: '📝' },
+                    { id: 'gorevler', label: 'Görev', icon: '✅' },
+                    { id: 'arsiv', label: 'Arşiv', icon: '📦' },
+                    { id: 'cop_kutusu', label: 'Çöp', icon: '🗑️' }
+                ],
+                activeTab: 'inbox',
+                counts: {},
+                items: [],
+                loading: false,
+                companies: [],
+                config: {},
+
+                // Filter
+                currentFilter: 'Tümü',
+                filterCompany: null,
+
+                // Modal
+                showModal: false,
+                editingItem: null,
+                formData: {
+                    title: '',
+                    content: '',
+                    folder: 'inbox'
+                },
+
+                // Proje Modal
+                showProjeModal: false,
+                projeItem: null,
+
+                async init() {
+                    // Check URL key
+                    const urlParams = new URLSearchParams(window.location.search);
+                    const key = urlParams.get('key');
+                    if (key) {
+                        this.apiKey = key;
+                        await this.verifyKey();
+                    }
+                },
+
+                async login() {
+                    this.apiKey = this.loginKey;
+                    await this.verifyKey();
+                },
+
+                async verifyKey() {
+                    try {
+                        const res = await fetch(`/api/auth?key=${this.apiKey}`);
+                        if (res.ok) {
+                            this.authenticated = true;
+                            this.loginError = '';
+                            await this.loadInitialData();
+                        } else {
+                            this.loginError = 'Geçersiz anahtar';
+                            this.apiKey = '';
+                        }
+                    } catch (e) {
+                        this.loginError = 'Bağlantı hatası';
+                    }
+                },
+
+                async loadInitialData() {
+                    await Promise.all([
+                        this.loadCounts(),
+                        this.loadItems(),
+                        this.loadCompanies(),
+                        this.loadConfig()
+                    ]);
+                },
+
+                async loadCounts() {
+                    try {
+                        const res = await fetch(`/api/counts?key=${this.apiKey}`);
+                        this.counts = await res.json();
+                    } catch (e) {
+                        console.error('Counts error:', e);
+                    }
+                },
+
+                async loadItems() {
+                    this.loading = true;
+                    try {
+                        const filter = encodeURIComponent(this.currentFilter);
+                        const res = await fetch(`/api/items/${this.activeTab}?key=${this.apiKey}&filter=${filter}`);
+                        this.items = await res.json();
+                    } catch (e) {
+                        console.error('Items error:', e);
+                    }
+                    this.loading = false;
+                },
+
+                async loadCompanies() {
+                    try {
+                        const res = await fetch(`/api/companies?key=${this.apiKey}`);
+                        this.companies = await res.json();
+                    } catch (e) {
+                        console.error('Companies error:', e);
+                    }
+                },
+
+                async loadConfig() {
+                    try {
+                        const res = await fetch(`/api/config?key=${this.apiKey}`);
+                        this.config = await res.json();
+                    } catch (e) {
+                        console.error('Config error:', e);
+                    }
+                },
+
+                getProjects(company) {
+                    return this.config[company] || [];
+                },
+
+                setFilter(filter) {
+                    this.currentFilter = filter;
+                    this.loadItems();
+                },
+
+                async refreshData() {
+                    await fetch(`/api/refresh?key=${this.apiKey}`, { method: 'POST' });
+                    await this.loadInitialData();
+                },
+
+                openNewModal() {
+                    this.editingItem = null;
+                    this.formData = {
+                        title: '',
+                        content: '',
+                        folder: this.activeTab === 'arsiv' || this.activeTab === 'cop_kutusu' ? 'inbox' : this.activeTab
+                    };
+                    this.showModal = true;
+                },
+
+                openEditModal(item) {
+                    this.editingItem = item;
+                    this.formData = {
+                        title: item.title,
+                        content: item.content || '',
+                        folder: this.activeTab
+                    };
+                    this.showModal = true;
+                },
+
+                async saveItem() {
+                    try {
+                        if (this.editingItem) {
+                            await fetch(`/api/items/${this.editingItem.id}?key=${this.apiKey}&folder=${this.activeTab}`, {
+                                method: 'PUT',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                    title: this.formData.title,
+                                    content: this.formData.content,
+                                    proje: this.editingItem.proje,
+                                    pinned: this.editingItem.pinned || false
+                                })
+                            });
+                        } else {
+                            await fetch(`/api/items?key=${this.apiKey}`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify(this.formData)
+                            });
+                        }
+                        this.showModal = false;
+                        await this.loadCounts();
+                        await this.loadItems();
+                    } catch (e) {
+                        console.error('Save error:', e);
+                    }
+                },
+
+                async moveItem(item, toFolder) {
+                    try {
+                        await fetch(`/api/items/${item.id}/move?key=${this.apiKey}`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                from_folder: this.activeTab,
+                                to_folder: toFolder
+                            })
+                        });
+                        await this.loadCounts();
+                        await this.loadItems();
+                    } catch (e) {
+                        console.error('Move error:', e);
+                    }
+                },
+
+                async deleteItem(item) {
+                    if (!confirm('Silmek istediğinize emin misiniz?')) return;
+                    try {
+                        await fetch(`/api/items/${item.id}?key=${this.apiKey}&folder=${this.activeTab}`, {
+                            method: 'DELETE'
+                        });
+                        await this.loadCounts();
+                        await this.loadItems();
+                    } catch (e) {
+                        console.error('Delete error:', e);
+                    }
+                },
+
+                async togglePin(item) {
+                    try {
+                        await fetch(`/api/items/${item.id}/pin?key=${this.apiKey}&folder=${this.activeTab}`, {
+                            method: 'POST'
+                        });
+                        await this.loadItems();
+                    } catch (e) {
+                        console.error('Pin error:', e);
+                    }
+                },
+
+                openProjeModal(item) {
+                    this.projeItem = item;
+                    this.showProjeModal = true;
+                },
+
+                async setProje(proje) {
+                    try {
+                        await fetch(`/api/items/${this.projeItem.id}/proje?key=${this.apiKey}`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                folder: this.activeTab,
+                                proje: proje
+                            })
+                        });
+                        this.showProjeModal = false;
+                        await this.loadItems();
+                    } catch (e) {
+                        console.error('Proje error:', e);
+                    }
+                },
+
+                async exportItems() {
+                    try {
+                        const name = this.currentFilter === 'Tümü'
+                            ? this.activeTab
+                            : this.currentFilter;
+
+                        const res = await fetch(`/api/export?key=${this.apiKey}`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                folder: this.activeTab,
+                                filter: this.currentFilter,
+                                name: name
+                            })
+                        });
+                        const data = await res.json();
+                        alert('Export başarılı: ' + data.filename);
+                    } catch (e) {
+                        console.error('Export error:', e);
+                        alert('Export hatası');
+                    }
+                }
+            }
+        }
+    </script>
+</body>
+</html>

@@ -5,11 +5,21 @@
 **GitHub Repository:**
 ```
 alylmz-kisisel-not-defterim/
-├── app.py                  # Streamlit uygulaması
+├── main.py                 # FastAPI backend
+├── app.py                  # Eski Streamlit uygulaması (yedek)
 ├── logo.webp               # BEIREK logosu
-├── requirements.txt        # Bağımlılıklar
+├── requirements-fastapi.txt # FastAPI bağımlılıklar
+├── requirements.txt        # Streamlit bağımlılıklar (eski)
+├── render.yaml             # Render.com deployment config
+├── run_local.sh            # Lokal geliştirme scripti (git'e dahil değil)
 ├── rules.md                # Bu dosya
 ├── sirketler_projeler.md   # Şirket & Proje indeksi
+├── services/
+│   ├── __init__.py
+│   └── drive.py            # Google Drive API servisleri
+├── static/
+│   ├── index.html          # SPA frontend (Tailwind + Alpine.js)
+│   └── logo.webp           # Logo kopyası
 └── .streamlit/
     └── secrets.toml        # Gizli anahtarlar (git'e dahil değil)
 ```
@@ -21,10 +31,24 @@ aliyilmaz-kisisel-not-defterim/    # Shared Drive ID: 0AFbVhvJLQtOHUk9PVA
 ├── notlar/                         # 📝 Notlar
 ├── gorevler/                       # ✅ Görevler
 ├── arsiv/                          # 📦 Arşiv (tamamlanan görevler)
-└── cop_kutusu/                     # 🗑️ Çöp kutusu (silinen öğeler)
+├── cop_kutusu/                     # 🗑️ Çöp kutusu (silinen öğeler)
+└── export/                         # 📤 Export dosyaları
 ```
 
 ## Mimari
+
+### Yeni Mimari (FastAPI + Tailwind + Alpine.js)
+
+**Backend:** FastAPI (Python)
+- REST API endpointleri
+- Google Drive API entegrasyonu
+- Environment variable ile credentials
+
+**Frontend:** Single Page Application (SPA)
+- Tailwind CSS (CDN)
+- Alpine.js (reaktif UI)
+- Mobile-first tasarım
+- iPhone 15 optimizasyonu
 
 ### Google Drive API (Single Source of Truth)
 
@@ -50,123 +74,56 @@ supportsAllDrives=True
 includeItemsFromAllDrives=True
 ```
 
-### SSL Sorunu Çözümü
+## API Endpointleri
 
-Python httplib2 ile SSL hatası oluşuyordu. Çözüm: Custom HTTP adapter ile requests kullanımı.
-
-```python
-from google.auth.transport.requests import AuthorizedSession
-
-class RequestsHttpAdapter:
-    def __init__(self, session):
-        self.session = session
-
-    def request(self, uri, method='GET', body=None, headers=None, **kwargs):
-        response = self.session.request(method, uri, data=body, headers=headers)
-        return type('Response', (), {
-            'status': response.status_code,
-            'reason': response.reason
-        })(), response.content
-
-# Kullanım:
-authed_session = AuthorizedSession(credentials)
-service = build('drive', 'v3', http=RequestsHttpAdapter(authed_session))
-```
+| Method | Endpoint | Açıklama |
+|--------|----------|----------|
+| GET | `/api/auth?key=xxx` | Authentication |
+| GET | `/api/counts?key=xxx` | Tüm klasör sayıları |
+| GET | `/api/items/{folder}?key=xxx&filter=Tümü` | Klasör öğeleri |
+| POST | `/api/items?key=xxx` | Yeni öğe oluştur |
+| PUT | `/api/items/{id}?key=xxx&folder=xxx` | Öğe güncelle |
+| POST | `/api/items/{id}/move?key=xxx` | Öğe taşı |
+| POST | `/api/items/{id}/pin?key=xxx&folder=xxx` | Sabitleme toggle |
+| POST | `/api/items/{id}/proje?key=xxx` | Proje ata |
+| DELETE | `/api/items/{id}?key=xxx&folder=xxx` | Öğe sil |
+| GET | `/api/companies?key=xxx` | Şirket listesi |
+| GET | `/api/projects?key=xxx&company=xxx` | Proje listesi |
+| GET | `/api/config?key=xxx` | Şirket-proje config |
+| POST | `/api/export?key=xxx` | Filtrelenmiş export |
+| POST | `/api/refresh?key=xxx` | Cache temizle |
 
 ## Deployment
 
-### Streamlit Cloud
+### Render.com (Yeni)
+
+**Build Command:** `pip install -r requirements-fastapi.txt`
+
+**Start Command:** `uvicorn main:app --host 0.0.0.0 --port $PORT`
+
+**Environment Variables:**
+- `APP_SECRET_KEY`: Erişim şifresi (1102)
+- `GCP_CREDENTIALS`: Service account JSON
+
+### Streamlit Cloud (Eski)
 
 **URL:** https://aliyilmaznotdefterim.streamlit.app/
 
 **GitHub Repo:** https://github.com/aliyilmazq/alylmz-kisisel-not-defterim (public)
 
-**Secrets (Streamlit Cloud > Settings > Secrets):**
-```toml
-app_secret_key = "***"  # Gizli anahtar
-
-[gcp_service_account]
-type = "service_account"
-project_id = "aliyilmaz-kisisel-not-defterim"
-private_key_id = "..."
-private_key = """
------BEGIN PRIVATE KEY-----
-...
------END PRIVATE KEY-----
-"""
-client_email = "notlarim-drive@aliyilmaz-kisisel-not-defterim.iam.gserviceaccount.com"
-# ... diğer alanlar
-```
-
-### Erişim Kontrolü
+## Erişim Kontrolü
 
 İki yöntemli authentication:
 
-1. **URL Parametresi:** `?key=***` - Tarayıcı bookmark için
+1. **URL Parametresi:** `?key=1102` - Tarayıcı bookmark için
 2. **Şifre Formu:** Ana ekrana eklendiğinde şifre gir, session boyunca hatırla
-
-```python
-SECRET_KEY = st.secrets.get("app_secret_key", "notlarim2024")
-
-if "authenticated" not in st.session_state:
-    st.session_state.authenticated = False
-
-# URL ile giriş
-if st.query_params.get("key") == SECRET_KEY:
-    st.session_state.authenticated = True
-
-# Şifre formu (URL parametresi yoksa)
-if not st.session_state.authenticated:
-    entered_key = st.text_input("Erişim anahtarı", type="password")
-    if st.button("Giriş"):
-        if entered_key == SECRET_KEY:
-            st.session_state.authenticated = True
-            st.rerun()
-```
-
-## Performans Optimizasyonları
-
-### Caching
-
-```python
-@st.cache_resource
-def get_drive_service():
-    """Drive service - uygulama başına bir kez"""
-
-@st.cache_data(ttl=60)
-def get_folder_ids():
-    """Klasör ID'leri - 60 saniye cache"""
-
-@st.cache_data(ttl=30)
-def get_items(folder_type: str):
-    """Dosya listesi ve içerikleri - 30 saniye cache"""
-
-@st.cache_data(ttl=30)
-def get_item_count(folder_type: str):
-    """Hızlı dosya sayısı (içerik okumadan) - 30 saniye cache"""
-```
-
-### Lazy Loading
-
-Tab sayıları için hızlı count API kullanılır, içerikler sadece ilgili tab görüntülendiğinde yüklenir:
-
-```python
-# Başlangıçta sadece sayılar
-inbox_count = get_item_count("inbox")
-notes_count = get_item_count("notlar")
-# ...
-
-# Tab içeriği görüntülendiğinde
-with tab1:
-    inbox = get_items("inbox")  # Şimdi yükle
-```
 
 ## UI / UX
 
 ### Header
 
 ```
-[BEIREK Logo 112px]  [＋ Yeni] (mavi buton)
+[BEIREK Logo]  [🔄 Yenile] [＋ Yeni] (mavi buton)
 ```
 
 ### Tab Menü
@@ -186,19 +143,19 @@ with tab1:
 ### Kart Görünümü
 
 ```
-▶ Başlık 📁 (proje varsa)
-  ─────────────────────────────
-  📁 Proje Adı (varsa)
-  Açıklama (max 2 satır)
-  ─────────────────────────────
-  [Aksiyon butonları - Segmented Control]
+📌 Başlık (sabitlendiyse)                  📁 (proje varsa)
+─────────────────────────────────────────
+📁 Proje Adı (varsa)
+Açıklama (max 2 satır)
+─────────────────────────────────────────
+[Aksiyon butonları]
 ```
 
 ### Aksiyonlar (Sadece İkon)
 
 - **Gelen Kutusu:** `📝 | ✅ | ✏️ | 🗑️`
-- **Notlar:** `📥 | ✅ | 📁 | ✏️ | 🗑️`
-- **Görevler:** `✔️ | 📝 | 📁 | 📥 | ✏️ | 🗑️`
+- **Notlar:** `📌 | 📥 | ✅ | 📁 | ✏️ | 🗑️`
+- **Görevler:** `📌 | ✔️ | 📝 | 📥 | 📁 | ✏️ | 🗑️`
 - **Arşiv:** `↩️ | 🗑️`
 - **Çöp:** `↩️ | 🗑️`
 
@@ -208,31 +165,20 @@ with tab1:
 | 📥 | Gelen'e taşı |
 | ✅ | Görev'e taşı |
 | ✔️ | Tamamla (Arşiv'e) |
+| 📌 | Sabitle/Kaldır |
 | 📁 | Proje ata |
 | ✏️ | Düzenle |
 | 🗑️ | Sil |
 | ↩️ | Geri al |
 
-### iPhone 15 Optimizasyonları (CSS)
+### iPhone 15 Optimizasyonları
 
 - Safe area desteği (notch, home indicator)
 - Kompakt padding ve spacing
-- iOS segment control stili tab'lar
-- Touch-friendly minimum 32-44px yükseklik
-- Streamlit header/footer gizleme
+- Touch-friendly minimum 44px yükseklik
 - Inter font ailesi
-
-```css
-/* Örnek optimizasyonlar */
-.main .block-container {
-    padding: 0.5rem 0.75rem 1rem 0.75rem !important;
-    padding-bottom: env(safe-area-inset-bottom, 1rem) !important;
-}
-
-[data-testid="stHeader"],
-[data-testid="stToolbar"],
-footer { display: none !important; }
-```
+- viewport-fit=cover
+- apple-mobile-web-app-capable
 
 ## Dosya Formatı
 
@@ -242,6 +188,7 @@ footer { display: none !important; }
 ---
 proje: "ENVEX - BHP Escondida Sözleşme Yönetimi"
 created: 2026-02-02
+pinned: false
 ---
 
 # Başlık
@@ -308,23 +255,13 @@ Hiyerarşik popover filtre (Şirket → Proje):
 └── ...
 ```
 
-**Filtre seviyeleri:**
-- `Tümü` - Her şey
-- `Projesi Yok` - Projesi atanmamış
-- `SIRKET (Tümü)` - Şirketin tüm notları/görevleri
-- `SIRKET - Proje` - Sadece o proje
-
 ### Export Özelliği
 
 Filtre yanındaki 📤 butonu ile filtrelenmiş öğeler export edilir:
-```
-[🔽 Filtre] [📤]
-```
 
 - Export dosyası Drive'da `export/` klasörüne kaydedilir
 - Dosya formatı: `export-YYYYMMDD-HHMM-filtre-adi.md`
 - Tüm öğeler tek markdown dosyasında birleştirilir
-- Başlık, proje, içerik ve pinned durumu dahil edilir
 
 ### Sabitleme (Pin) Özelliği
 
@@ -334,64 +271,70 @@ Filtre yanındaki 📤 butonu ile filtrelenmiş öğeler export edilir:
 - Tekrar basınca sabitleme kalkar
 - Frontmatter: `pinned: true/false`
 
-## Session State
+## Servis Modülü (services/drive.py)
 
-```python
-st.session_state.authenticated = False    # Giriş durumu
-st.session_state.edit_mode = False        # Düzenleme modu
-st.session_state.selected_item = None     # Düzenlenen öğe
-st.session_state.proje_mode = False       # Proje seçim modu
-st.session_state.proje_item = None        # Proje atanacak öğe
-st.session_state.notlar_filter = "Tümü"   # Notlar tab filtresi
-st.session_state.gorevler_filter = "Tümü" # Görevler tab filtresi
-```
-
-## Önemli Fonksiyonlar
+Tüm Drive işlemleri bu modülde:
 
 ```python
 # Drive Service
 get_drive_service() -> googleapiclient.discovery.Resource
+get_credentials() -> Credentials
 
 # Veri Çekme
 get_folder_ids() -> dict[str, str]
 get_item_count(folder_type: str) -> int
 get_items(folder_type: str) -> list[dict]
 get_items_filtered(folder_type: str, proje_filter: str) -> list[dict]
+get_all_counts() -> dict
 
 # Dosya İşlemleri
-save_file(title, content, folder_type, proje=None, file_id=None)
+save_file(title, content, folder_type, proje=None, file_id=None, pinned=False)
 move_file(file_id, from_folder, to_folder)
 delete_file(file_id, folder_type)
 update_proje(file_id, folder_type, proje)
+toggle_pin(file_id, folder_type) -> bool
 
 # Parsing
 parse_frontmatter(content: str) -> tuple[dict, str]
-create_frontmatter(proje: str = None) -> str
+create_frontmatter(proje: str = None, pinned: bool = False) -> str
 parse_body(body: str, fallback_title: str) -> tuple[str, str]
 
-# UI Rendering
-render_card(item, folder, key_prefix)
-render_tab(items, folder, key_prefix)
-render_filter(folder_type, filter_state_key, select_key)
+# Export
+export_items(items: list[dict], export_name: str) -> str
+get_or_create_export_folder() -> str
+
+# Config
+get_sirket_options() -> list[str]
+get_proje_options(sirket: str = None) -> list[str]
+get_companies_with_counts() -> list[dict]
+clear_cache()
 ```
 
-## Gereksinimler
+## Gereksinimler (FastAPI)
 
 ```
-streamlit>=1.28.0
+fastapi>=0.109.0
+uvicorn[standard]>=0.27.0
 google-api-python-client>=2.100.0
 google-auth>=2.23.0
-google-auth-oauthlib>=1.1.0
+requests>=2.31.0
+python-multipart>=0.0.6
 ```
 
 ## Lokal Geliştirme
 
 ```bash
 cd /Users/alylmztr/Documents/GitHub/alylmz-kisisel-not-defterim
-streamlit run app.py --server.port 8510
+
+# Environment variables ayarla
+export APP_SECRET_KEY="1102"
+export GCP_CREDENTIALS='{"type":"service_account",...}'
+
+# Sunucuyu başlat
+uvicorn main:app --reload --port 8510
 ```
 
-**URL:** http://localhost:8510?key=***
+**URL:** http://localhost:8510?key=1102
 
 ## Git İşlemleri
 
