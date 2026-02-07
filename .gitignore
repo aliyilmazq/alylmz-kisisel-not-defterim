@@ -1,5 +1,4 @@
 # Secrets - ASLA commit etme!
-.streamlit/secrets.toml
 *.json
 run_local.sh
 

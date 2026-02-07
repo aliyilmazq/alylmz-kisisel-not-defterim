@@ -418,7 +418,6 @@
                 authenticated: false,
                 loginKey: '',
                 loginError: '',
-                apiKey: '',
 
                 tabs: [
                     { id: 'inbox', label: 'Gelen', icon: '📥' },
@@ -453,15 +452,22 @@
                     // Alpine store olarak kaydet (hierarchical dropdown için)
                     Alpine.store('app', this);
 
-                    const urlParams = new URLSearchParams(window.location.search);
-                    const key = urlParams.get('key');
-                    if (key) {
-                        this.apiKey = key;
-                        await this.verifyKey();
+                    // Cookie varsa otomatik doğrula
+                    try {
+                        await this.api('GET', '/api/auth');
+                        this.authenticated = true;
+                        await this.loadInitialData();
+                    } catch (e) {
+                        // Cookie yok veya geçersiz - login ekranı göster
                     }
-                    // Keep-alive ping
+                    // Keep-alive ping - auth hatası olursa logout yap
                     setInterval(() => {
-                        if (this.apiKey) this.api('GET', '/api/auth').catch(() => {});
+                        if (this.authenticated) {
+                            this.api('GET', '/api/auth').catch(() => {
+                                this.authenticated = false;
+                                this.loginError = 'Oturum süresi doldu, tekrar giriş yapın';
+                            });
+                        }
                     }, 5 * 60 * 1000);
                 },
 
@@ -469,11 +475,11 @@
                 async api(method, url, body = null) {
                     const options = {
                         method,
+                        credentials: 'same-origin',
                         headers: body ? { 'Content-Type': 'application/json' } : {}
                     };
                     if (body) options.body = JSON.stringify(body);
-                    const separator = url.includes('?') ? '&' : '?';
-                    const res = await fetch(`${url}${separator}key=${this.apiKey}`, options);
+                    const res = await fetch(url, options);
                     if (!res.ok) throw new Error(`API Error: ${res.status}`);
                     return res.json();
                 },
@@ -503,19 +509,14 @@
 
                 // ============ AUTH ============
                 async login() {
-                    this.apiKey = this.loginKey;
-                    await this.verifyKey();
-                },
-
-                async verifyKey() {
                     try {
-                        await this.api('GET', '/api/auth');
+                        await this.api('POST', '/api/auth', { key: this.loginKey });
                         this.authenticated = true;
                         this.loginError = '';
+                        this.loginKey = '';
                         await this.loadInitialData();
                     } catch (e) {
                         this.loginError = 'Geçersiz anahtar';
-                        this.apiKey = '';
                     }
                 },
 
@@ -707,7 +708,7 @@
                     this.counts[toFolder] = (this.counts[toFolder] || 0) + 1;
                     // API çağrısı arka planda
                     this.api('POST', `/api/items/${item.id}/move`, { from_folder: this.activeTab, to_folder: toFolder })
-                        .catch(e => { console.error('Move error:', e); this.loadItems(); });
+                        .catch(e => { console.error('Move error:', e); this.loadItems(); this.loadCounts(); });
                 },
 
                 async deleteItem(item) {
@@ -717,7 +718,7 @@
                     this.counts[this.activeTab] = Math.max(0, (this.counts[this.activeTab] || 1) - 1);
                     // API çağrısı arka planda
                     this.api('DELETE', `/api/items/${item.id}?folder=${this.activeTab}`)
-                        .catch(e => { console.error('Delete error:', e); this.loadItems(); });
+                        .catch(e => { console.error('Delete error:', e); this.loadItems(); this.loadCounts(); });
                 },
 
                 async togglePin(item) {
@@ -726,7 +727,7 @@
                     this.items = [...this.items].sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0));
                     // API çağrısı arka planda
                     this.api('POST', `/api/items/${item.id}/pin?folder=${this.activeTab}`)
-                        .catch(e => { console.error('Pin error:', e); this.loadItems(); });
+                        .catch(e => { console.error('Pin error:', e); this.loadItems(); this.loadCounts(); });
                 },
 
                 // ============ MODALS ============

@@ -4,17 +4,17 @@ Tüm Drive işlemleri bu modülde
 """
 import os
 import json
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaInMemoryUpload
 from google.auth.transport.requests import AuthorizedSession
 from datetime import datetime
-from functools import lru_cache
 import time
 
 # Config
 SCOPES = ['https://www.googleapis.com/auth/drive']
-SHARED_DRIVE_ID = "0AFbVhvJLQtOHUk9PVA"
+SHARED_DRIVE_ID = os.environ.get("SHARED_DRIVE_ID", "0AFbVhvJLQtOHUk9PVA")
 
 # Şirket ve Proje Konfigürasyonu
 SIRKET_PROJE_CONFIG = {
@@ -243,8 +243,47 @@ def generate_summary(content: str, max_chars: int = 200) -> str:
     return summary
 
 
+def _fetch_file_content(service, file_info: dict) -> dict:
+    """Tek dosyanın içeriğini çek ve parse et"""
+    content = service.files().get_media(fileId=file_info['id']).execute().decode('utf-8')
+    frontmatter, body = parse_frontmatter(content)
+    title, body_content = parse_body(body, file_info['name'].replace('.md', ''))
+    return {
+        "id": file_info['id'],
+        "filename": file_info['name'],
+        "title": title,
+        "content": body_content,
+        "summary": generate_summary(body_content),
+        "proje": frontmatter.get("proje"),
+        "created": frontmatter.get("created"),
+        "modified": file_info['modifiedTime'],
+        "pinned": frontmatter.get("pinned", False),
+    }
+
+
+def _list_all_files(service, folder_id: str, fields: str = "nextPageToken, files(id, name, modifiedTime)") -> list[dict]:
+    """Klasördeki tüm dosyaları pagination ile çek"""
+    all_files = []
+    page_token = None
+    while True:
+        results = service.files().list(
+            q=f"'{folder_id}' in parents and trashed=false",
+            fields=fields,
+            orderBy="modifiedTime desc",
+            pageSize=100,
+            pageToken=page_token,
+            supportsAllDrives=True,
+            includeItemsFromAllDrives=True
+        ).execute()
+        all_files.extend(results.get('files', []))
+        page_token = results.get('nextPageToken')
+        if not page_token:
+            break
+    return all_files
+
+
 def get_items(folder_type: str) -> list[dict]:
-    """Google Drive'dan dosyaları çek (cached)"""
+    """Google Drive'dan dosyaları çek (cached, paralel fetch)"""
     cache_key = f"items_{folder_type}"
     cached = get_cached(cache_key)
     if cached is not None:
@@ -257,32 +296,14 @@ def get_items(folder_type: str) -> list[dict]:
         return []
 
     folder_id = folder_ids[folder_type]
+    all_files = _list_all_files(service, folder_id)
+
+    # İçerikleri paralel çek (5 thread)
     items = []
-
-    results = service.files().list(
-        q=f"'{folder_id}' in parents and trashed=false",
-        fields="files(id, name, modifiedTime)",
-        orderBy="modifiedTime desc",
-        supportsAllDrives=True,
-        includeItemsFromAllDrives=True
-    ).execute()
-
-    for file in results.get('files', []):
-        content = service.files().get_media(fileId=file['id']).execute().decode('utf-8')
-        frontmatter, body = parse_frontmatter(content)
-        title, body_content = parse_body(body, file['name'].replace('.md', ''))
-
-        items.append({
-            "id": file['id'],
-            "filename": file['name'],
-            "title": title,
-            "content": body_content,
-            "summary": generate_summary(body_content),
-            "proje": frontmatter.get("proje"),
-            "created": frontmatter.get("created"),
-            "modified": file['modifiedTime'],
-            "pinned": frontmatter.get("pinned", False),
-        })
+    with ThreadPoolExecutor(max_workers=5) as executor:
+        futures = {executor.submit(_fetch_file_content, service, f): f for f in all_files}
+        for future in as_completed(futures):
+            items.append(future.result())
 
     # Sabitlenmiş öğeler üstte
     items.sort(key=lambda x: (not x.get("pinned", False)))
@@ -298,14 +319,8 @@ def get_item_count(folder_type: str) -> int:
     if folder_type not in folder_ids:
         return 0
 
-    results = service.files().list(
-        q=f"'{folder_ids[folder_type]}' in parents and trashed=false",
-        fields="files(id)",
-        supportsAllDrives=True,
-        includeItemsFromAllDrives=True
-    ).execute()
-
-    return len(results.get('files', []))
+    all_files = _list_all_files(service, folder_ids[folder_type], fields="nextPageToken, files(id)")
+    return len(all_files)
 
 
 def get_all_counts() -> dict:
@@ -340,11 +355,26 @@ def get_items_filtered(folder_type: str, proje_filter: str = "Tümü") -> list[d
         return [item for item in items if item.get("proje") == proje_filter]
 
 
+def _sanitize_title(title: str) -> str:
+    """Başlıktan frontmatter injection'ı engelle"""
+    # Satır sonlarını kaldır (frontmatter injection önlemi)
+    return title.replace('\n', ' ').replace('\r', ' ').strip()
+
+
+def _invalidate_items_cache():
+    """Yazma işlemlerinden sonra item cache'lerini temizle"""
+    keys_to_remove = [k for k in _cache if k.startswith("items_") or k == "all_counts"]
+    for k in keys_to_remove:
+        _cache.pop(k, None)
+        _cache_ttl.pop(k, None)
+
+
 def save_file(title: str, content: str, folder_type: str, proje: str = None, file_id: str = None, pinned: bool = False):
     """Dosya kaydet veya güncelle"""
     service = get_drive_service()
     folder_ids = get_folder_ids()
 
+    title = _sanitize_title(title)
     frontmatter = create_frontmatter(proje, pinned)
     md_content = f"{frontmatter}\n\n# {title}\n\n{content}"
 
@@ -356,6 +386,7 @@ def save_file(title: str, content: str, folder_type: str, proje: str = None, fil
             media_body=media,
             supportsAllDrives=True
         ).execute()
+        _invalidate_items_cache()
         return file_id
     else:
         date_prefix = datetime.now().strftime("%Y-%m-%d")
@@ -373,6 +404,7 @@ def save_file(title: str, content: str, folder_type: str, proje: str = None, fil
             media_body=media,
             supportsAllDrives=True
         ).execute()
+        _invalidate_items_cache()
         return result.get('id')
 
 
@@ -387,6 +419,7 @@ def move_file(file_id: str, from_folder: str, to_folder: str):
         removeParents=folder_ids[from_folder],
         supportsAllDrives=True
     ).execute()
+    _invalidate_items_cache()
 
 
 def delete_file(file_id: str, folder_type: str):
@@ -395,44 +428,44 @@ def delete_file(file_id: str, folder_type: str):
 
     if folder_type == "cop_kutusu":
         service.files().delete(fileId=file_id, supportsAllDrives=True).execute()
+        _invalidate_items_cache()
     else:
         move_file(file_id, folder_type, "cop_kutusu")
 
 
-def update_proje(file_id: str, folder_type: str, proje: str):
-    """Dosyanın projesini güncelle"""
+def get_file_parsed(file_id: str) -> tuple[dict, str, str]:
+    """Dosyayı oku ve parse et: (frontmatter, title, body_content)"""
     service = get_drive_service()
-
     content = service.files().get_media(fileId=file_id).execute().decode('utf-8')
     frontmatter, body = parse_frontmatter(content)
     title, body_content = parse_body(body)
+    return frontmatter, title, body_content
 
+
+def update_proje(file_id: str, folder_type: str, proje: str):
+    """Dosyanın projesini güncelle"""
+    frontmatter, title, body_content = get_file_parsed(file_id)
     save_file(title, body_content, folder_type, proje, file_id, frontmatter.get("pinned", False))
 
 
 def toggle_pin(file_id: str, folder_type: str) -> bool:
     """Dosyanın sabitleme durumunu değiştir, yeni durumu döndür"""
-    service = get_drive_service()
-
-    content = service.files().get_media(fileId=file_id).execute().decode('utf-8')
-    frontmatter, body = parse_frontmatter(content)
-    title, body_content = parse_body(body)
-
+    frontmatter, title, body_content = get_file_parsed(file_id)
     new_pinned = not frontmatter.get("pinned", False)
     save_file(title, body_content, folder_type, frontmatter.get("proje"), file_id, new_pinned)
     return new_pinned
 
 
-def get_or_create_export_folder() -> str:
-    """Export klasörünü al veya oluştur"""
+def get_or_create_folder(folder_name: str) -> str:
+    """Klasörü al veya oluştur (export, logs vb.)"""
     service = get_drive_service()
     folder_ids = get_folder_ids()
 
-    if "export" in folder_ids:
-        return folder_ids["export"]
+    if folder_name in folder_ids:
+        return folder_ids[folder_name]
 
     file_metadata = {
-        'name': 'export',
+        'name': folder_name,
         'mimeType': 'application/vnd.google-apps.folder',
         'parents': [SHARED_DRIVE_ID]
     }
@@ -442,13 +475,18 @@ def get_or_create_export_folder() -> str:
         fields='id'
     ).execute()
 
+    # Cache güncelle
+    global _folder_ids_cache
+    if _folder_ids_cache:
+        _folder_ids_cache[folder_name] = folder.get('id')
+
     return folder.get('id')
 
 
 def export_items(items: list[dict], export_name: str) -> str:
     """Öğeleri tek bir markdown dosyasına export et"""
     service = get_drive_service()
-    export_folder_id = get_or_create_export_folder()
+    export_folder_id = get_or_create_folder("export")
 
     today = datetime.now().strftime("%Y-%m-%d %H:%M")
     content_lines = [f"# Export: {export_name}", f"Tarih: {today}", f"Toplam: {len(items)} öğe", "", "---", ""]
@@ -516,38 +554,11 @@ def get_companies_with_counts() -> list[dict]:
 # ERROR LOGGING - Google Drive'a kaydet
 # ============================================
 
-def get_or_create_logs_folder() -> str:
-    """Logs klasörünü al veya oluştur"""
-    service = get_drive_service()
-    folder_ids = get_folder_ids()
-
-    if "logs" in folder_ids:
-        return folder_ids["logs"]
-
-    file_metadata = {
-        'name': 'logs',
-        'mimeType': 'application/vnd.google-apps.folder',
-        'parents': [SHARED_DRIVE_ID]
-    }
-    folder = service.files().create(
-        body=file_metadata,
-        supportsAllDrives=True,
-        fields='id'
-    ).execute()
-
-    # Cache güncelle
-    global _folder_ids_cache
-    if _folder_ids_cache:
-        _folder_ids_cache["logs"] = folder.get('id')
-
-    return folder.get('id')
-
-
 def log_error(error_type: str, message: str, details: dict = None):
     """Hatayı Drive'daki logs klasörüne kaydet"""
     try:
         service = get_drive_service()
-        logs_folder_id = get_or_create_logs_folder()
+        logs_folder_id = get_or_create_folder("logs")
 
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         date_str = datetime.now().strftime("%Y-%m-%d")

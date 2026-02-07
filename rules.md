@@ -5,25 +5,22 @@
 **GitHub Repository:**
 ```
 alylmz-kisisel-not-defterim/
-├── main.py                 # FastAPI backend
-├── app_legacy_streamlit.py # Arşivlenmiş Streamlit uygulaması (kullanılmıyor)
+├── main.py                 # FastAPI backend (cookie-based auth, CORS)
 ├── logo.webp               # BEIREK logosu
-├── requirements-fastapi.txt # FastAPI bağımlılıklar
-├── requirements.txt        # Streamlit bağımlılıklar (eski)
+├── requirements.txt        # FastAPI bağımlılıklar
 ├── render.yaml             # Render.com deployment config
 ├── backup_to_icloud.sh     # iCloud yedekleme scripti
 ├── com.alylmz.notdefteri.backup.plist  # launchd zamanlayıcı
 ├── run_local.sh            # Lokal geliştirme scripti (git'e dahil değil)
+├── not-defterim.command    # macOS başlatma scripti (çift tıkla)
 ├── rules.md                # Bu dosya
 ├── sirketler_projeler.md   # Şirket & Proje indeksi
 ├── services/
 │   ├── __init__.py
 │   └── drive.py            # Google Drive API servisleri + error logging
-├── static/
-│   ├── index.html          # SPA frontend (Tailwind + Alpine.js)
-│   └── logo.webp           # Logo kopyası
-└── .streamlit/
-    └── secrets.toml        # Gizli anahtarlar (git'e dahil değil)
+└── static/
+    ├── index.html          # SPA frontend (Tailwind + Alpine.js)
+    └── logo.webp           # Logo kopyası
 ```
 
 **Google Workspace Shared Drive (Veri):**
@@ -103,8 +100,8 @@ const CONFIG = {
 **Merkezi Fonksiyonlar:**
 
 ```javascript
-// Tüm API çağrıları tek fonksiyondan
-api(method, url, body = null)
+// Tüm API çağrıları tek fonksiyondan (cookie credentials ile)
+api(method, url, body = null)  // credentials: 'same-origin'
 
 // Aksiyon butonları CONFIG'den alınır
 getActions() → CONFIG.actions[activeTab]
@@ -170,7 +167,7 @@ notlarim-drive@aliyilmaz-kisisel-not-defterim.iam.gserviceaccount.com
 **API Konfigürasyonu:**
 ```python
 SCOPES = ['https://www.googleapis.com/auth/drive']
-SHARED_DRIVE_ID = "0AFbVhvJLQtOHUk9PVA"
+SHARED_DRIVE_ID = os.environ.get("SHARED_DRIVE_ID", "0AFbVhvJLQtOHUk9PVA")
 
 # Tüm API çağrılarında gerekli parametreler:
 supportsAllDrives=True
@@ -179,22 +176,26 @@ includeItemsFromAllDrives=True
 
 ## API Endpointleri
 
+**Authentication:** Cookie-based (httpOnly, samesite=strict, 30 gün TTL).
+Tüm endpointler `notdefteri_key` cookie'si ile korunur.
+
 | Method | Endpoint | Açıklama |
 |--------|----------|----------|
-| GET | `/api/auth?key=xxx` | Authentication |
-| GET | `/api/counts?key=xxx` | Tüm klasör sayıları |
-| GET | `/api/items/{folder}?key=xxx&filter=Tümü` | Klasör öğeleri |
-| POST | `/api/items?key=xxx` | Yeni öğe oluştur |
-| PUT | `/api/items/{id}?key=xxx&folder=xxx` | Öğe güncelle |
-| POST | `/api/items/{id}/move?key=xxx` | Öğe taşı |
-| POST | `/api/items/{id}/pin?key=xxx&folder=xxx` | Sabitleme toggle |
-| POST | `/api/items/{id}/proje?key=xxx` | Proje ata |
-| DELETE | `/api/items/{id}?key=xxx&folder=xxx` | Öğe sil |
-| GET | `/api/companies?key=xxx` | Şirket listesi |
-| GET | `/api/projects?key=xxx&company=xxx` | Proje listesi |
-| GET | `/api/config?key=xxx` | Şirket-proje config |
-| POST | `/api/export?key=xxx` | Filtrelenmiş export |
-| POST | `/api/refresh?key=xxx` | Cache temizle |
+| POST | `/api/auth` | Login - cookie set eder (body: `{key}`) |
+| GET | `/api/auth` | Cookie doğrulama |
+| GET | `/api/counts` | Tüm klasör sayıları |
+| GET | `/api/items/{folder}?filter=Tümü` | Klasör öğeleri |
+| POST | `/api/items` | Yeni öğe oluştur |
+| PUT | `/api/items/{id}?folder=xxx` | Öğe güncelle |
+| POST | `/api/items/{id}/move` | Öğe taşı |
+| POST | `/api/items/{id}/pin?folder=xxx` | Sabitleme toggle |
+| POST | `/api/items/{id}/proje` | Proje ata |
+| DELETE | `/api/items/{id}?folder=xxx` | Öğe sil |
+| GET | `/api/companies` | Şirket listesi |
+| GET | `/api/projects?company=xxx` | Proje listesi |
+| GET | `/api/config` | Şirket-proje config |
+| POST | `/api/export` | Filtrelenmiş export |
+| POST | `/api/refresh` | Cache temizle |
 
 ## Deployment
 
@@ -202,32 +203,28 @@ includeItemsFromAllDrives=True
 
 **URL:** https://alylmz-kisisel-not-defterim.onrender.com
 
-**Erişim:**
-- Direkt: https://alylmz-kisisel-not-defterim.onrender.com?key=1102
-- Şifreli: https://alylmz-kisisel-not-defterim.onrender.com → `1102` gir
+**Erişim:** Login formu ile giriş yap (cookie-based auth)
 
-**Build Command:** `pip install -r requirements-fastapi.txt`
+**Build Command:** `pip install -r requirements.txt`
 
 **Start Command:** `uvicorn main:app --host 0.0.0.0 --port $PORT`
 
-**Environment Variables:**
-- `APP_SECRET_KEY`: Erişim şifresi (1102)
+**Environment Variables (zorunlu):**
+- `APP_SECRET_KEY`: Erişim şifresi (uygulama bu olmadan başlamaz)
 - `GCP_CREDENTIALS`: Service account JSON
+- `ALLOWED_ORIGINS`: (opsiyonel) CORS izinli origin'ler (virgülle ayrılmış)
+- `SHARED_DRIVE_ID`: (opsiyonel) Google Drive ID (varsayılan mevcut)
 
 **GitHub Repo:** https://github.com/aliyilmazq/alylmz-kisisel-not-defterim (public)
 
-### Streamlit Cloud (Arşivlenmiş)
-
-> **KALDIRILDI:** Streamlit uygulaması artık kullanılmıyor.
-> Tüm işlemler FastAPI backend üzerinden yapılmaktadır.
-> Eski URL: https://aliyilmaznotdefterim.streamlit.app/
-
 ## Erişim Kontrolü
 
-İki yöntemli authentication:
+**Cookie-based authentication:**
 
-1. **URL Parametresi:** `?key=1102` - Tarayıcı bookmark için
-2. **Şifre Formu:** Ana ekrana eklendiğinde şifre gir, session boyunca hatırla
+1. **Login formu:** Şifre gir → `POST /api/auth` → httpOnly cookie set edilir
+2. **Cookie:** `notdefteri_key` (httpOnly, samesite=strict, 30 gün TTL)
+3. **Auto-login:** Sayfa yüklendiğinde cookie varsa otomatik doğrulama
+4. **Auth expiry:** Keep-alive ping başarısız olursa login ekranına döner
 
 ## UI / UX
 
@@ -450,28 +447,35 @@ Tüm Drive işlemleri bu modülde:
 get_drive_service() -> googleapiclient.discovery.Resource
 get_credentials() -> Credentials
 
-# Veri Çekme
+# Veri Çekme (paralel fetch, pagination)
 get_folder_ids() -> dict[str, str]
 get_item_count(folder_type: str) -> int
-get_items(folder_type: str) -> list[dict]
+get_items(folder_type: str) -> list[dict]         # ThreadPoolExecutor(5) ile paralel
 get_items_filtered(folder_type: str, proje_filter: str) -> list[dict]
 get_all_counts() -> dict
+_list_all_files(service, folder_id, fields) -> list[dict]  # pageSize=100 + nextPageToken
+_fetch_file_content(service, file_info) -> dict
 
-# Dosya İşlemleri
+# Dosya İşlemleri (her biri cache invalidation yapar)
 save_file(title, content, folder_type, proje=None, file_id=None, pinned=False)
 move_file(file_id, from_folder, to_folder)
 delete_file(file_id, folder_type)
 update_proje(file_id, folder_type, proje)
 toggle_pin(file_id, folder_type) -> bool
+get_file_parsed(file_id) -> tuple[dict, str, str]  # Dosya oku + parse et
 
-# Parsing
+# Parsing & Sanitization
 parse_frontmatter(content: str) -> tuple[dict, str]
 create_frontmatter(proje: str = None, pinned: bool = False) -> str
 parse_body(body: str, fallback_title: str) -> tuple[str, str]
+_sanitize_title(title: str) -> str  # Frontmatter injection önlemi
 
-# Export
+# Cache
+_invalidate_items_cache()  # Yazma sonrası seçici cache temizleme
+
+# Klasör & Export
+get_or_create_folder(folder_name: str) -> str  # export, logs vb.
 export_items(items: list[dict], export_name: str) -> str
-get_or_create_export_folder() -> str
 
 # Config
 get_sirket_options() -> list[str]
@@ -539,7 +543,7 @@ API çağrısından sonra backend'den gerçek summary gelir.
 
 ## Performans Optimizasyonları
 
-### Backend Cache (TTL)
+### Backend Cache (TTL + Invalidation)
 
 ```python
 CACHE_DURATION = 30  # seconds
@@ -548,8 +552,30 @@ CACHE_DURATION = 30  # seconds
 get_items(folder_type)      # 30sn cache
 get_all_counts()            # 30sn cache
 
-# Cache temizleme:
+# Yazma sonrası otomatik cache invalidation:
+_invalidate_items_cache()   # save_file, move_file, delete_file sonrası çağrılır
+
+# Manuel cache temizleme:
 clear_cache()               # Tüm cache sıfırlanır
+```
+
+### Paralel Content Fetch
+
+```python
+# N+1 query problemi: Her dosya için ayrı API çağrısı
+# Çözüm: ThreadPoolExecutor ile 5 paralel thread
+with ThreadPoolExecutor(max_workers=5) as executor:
+    futures = {executor.submit(_fetch_file_content, service, f): f for f in all_files}
+    for future in as_completed(futures):
+        items.append(future.result())
+```
+
+### Pagination
+
+```python
+# Google Drive API pageSize=100 + nextPageToken döngüsü
+# Büyük klasörlerde tüm dosyaların çekilmesini garanti eder
+_list_all_files(service, folder_id, fields)
 ```
 
 ### Frontend Cache (localStorage)
@@ -569,8 +595,15 @@ clearLocalCache()           // Tüm local cache sil
 
 ```javascript
 // Her 5 dakikada bir API'ye ping
-// Render.com cold start'ı önler
-setInterval(() => fetch('/api/auth?key=...'), 5 * 60 * 1000);
+// Render.com cold start'ı önler + auth expiry kontrolü
+setInterval(() => {
+    if (this.authenticated) {
+        this.api('GET', '/api/auth').catch(() => {
+            this.authenticated = false;
+            this.loginError = 'Oturum süresi doldu, tekrar giriş yapın';
+        });
+    }
+}, 5 * 60 * 1000);
 ```
 
 ### Skeleton Loading
@@ -634,11 +667,13 @@ async togglePin(item) {
 
 **Optimistic aksiyonlar:**
 - `togglePin`: Anlık toggle ve sıralama
-- `moveItem`: Anlık listeden kaldırma
-- `deleteItem`: Anlık listeden kaldırma
+- `moveItem`: Anlık listeden kaldırma + count güncelleme
+- `deleteItem`: Anlık listeden kaldırma + count güncelleme
 - `setProje`: Anlık proje güncelleme
 - `saveItem` (edit): Anlık başlık/içerik güncelleme
 - `quickSave`: Anlık listeye ekleme
+
+**Hata durumunda kurtarma:** Tüm optimistic aksiyonlarda API hatası olursa hem `loadItems()` hem `loadCounts()` çağrılarak gerçek duruma geri dönülür.
 
 ### Yenile Butonu
 
@@ -646,7 +681,7 @@ async togglePin(item) {
 - localStorage cache temizler
 - Tüm veriyi yeniden çeker
 
-## Gereksinimler (FastAPI)
+## Gereksinimler (requirements.txt)
 
 ```
 fastapi>=0.109.0
@@ -662,27 +697,26 @@ python-multipart>=0.0.6
 ### Tek Doğru Başlatma Yöntemi
 
 **Komut dosyası:** `not-defterim.command` (çift tıkla)
+- `run_local.sh`'den `APP_SECRET_KEY` ve `GCP_CREDENTIALS` otomatik yüklenir
+- Tarayıcı http://localhost:8510 adresine açılır
+- Login formu ile giriş yap
 
 veya
 
 **Terminal:**
 ```bash
 cd /Users/alylmztr/Documents/GitHub/alylmz-kisisel-not-defterim
-export APP_SECRET_KEY="1102"
-export GCP_CREDENTIALS='{"type":"service_account",...}'
+source run_local.sh  # APP_SECRET_KEY ve GCP_CREDENTIALS export eder
 uvicorn main:app --host 0.0.0.0 --port 8510
 ```
 
-**URL:** http://localhost:8510?key=1102
+**URL:** http://localhost:8510
 
 ### Geliştirici Modu (hot-reload)
 
 ```bash
 uvicorn main:app --reload --port 8510
 ```
-
-> **NOT:** `streamlit run app.py` artık geçerli değildir.
-> Streamlit uygulaması `app_legacy_streamlit.py` olarak arşivlenmiştir.
 
 ## Error Logging
 
