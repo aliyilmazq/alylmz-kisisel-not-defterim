@@ -2,7 +2,17 @@
 
 cd "/Users/alylmztr/Documents/GitHub/alylmz-kisisel-not-defterim"
 
-# 2 saniye sonra tarayıcıyı aç
-(sleep 2 && open "http://localhost:8510") &
+# Load credentials from run_local.sh (which is not in git)
+if [ -f "./run_local.sh" ]; then
+    export APP_SECRET_KEY="1102"
+    # Extract and eval GCP_CREDENTIALS export line
+    eval "$(grep -A20 'export GCP_CREDENTIALS' ./run_local.sh | head -14)"
+else
+    echo "ERROR: run_local.sh not found. Please create it with GCP_CREDENTIALS."
+    exit 1
+fi
 
-streamlit run app.py --server.port 8510
+# 2 saniye sonra tarayiciyi ac
+(sleep 2 && open "http://localhost:8510?key=1102") &
+
+uvicorn main:app --host 0.0.0.0 --port 8510

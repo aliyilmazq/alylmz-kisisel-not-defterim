@@ -6,7 +6,7 @@
 ```
 alylmz-kisisel-not-defterim/
 ├── main.py                 # FastAPI backend
-├── app.py                  # Eski Streamlit uygulaması (yedek)
+├── app_legacy_streamlit.py # Arşivlenmiş Streamlit uygulaması (kullanılmıyor)
 ├── logo.webp               # BEIREK logosu
 ├── requirements-fastapi.txt # FastAPI bağımlılıklar
 ├── requirements.txt        # Streamlit bağımlılıklar (eski)
@@ -74,7 +74,8 @@ const CONFIG = {
     card: {
         showDate: true,       // Tarih göster
         contentLines: 2,      // Sabit içerik satır sayısı
-        expandable: true      // Genişlet/daralt özelliği
+        expandable: true,     // Genişlet/daralt özelliği
+        summaryMaxChars: 200  // Özet karakter limiti (backend ile eşleşir)
     },
     // Tab düzeni
     tabs: {
@@ -117,8 +118,8 @@ getTabRows() → [[row1 tabs], [row2 tabs]]
 // Tarih formatı Türkçe
 formatDate("2026-02-02") → "2 Şubat"
 
-// İçerik genişletme kontrolü
-needsExpand(content) → satır sayısı veya karakter/40 > contentLines
+// İçerik genişletme kontrolü (summary/content karşılaştırır)
+needsExpand(item) → summary !== content veya satır sayısı > contentLines
 ```
 
 ### Tek Kaynak Bileşenler
@@ -215,9 +216,11 @@ includeItemsFromAllDrives=True
 
 **GitHub Repo:** https://github.com/aliyilmazq/alylmz-kisisel-not-defterim (public)
 
-### Streamlit Cloud (Eski - Devre Dışı)
+### Streamlit Cloud (Arşivlenmiş)
 
-**URL:** https://aliyilmaznotdefterim.streamlit.app/
+> **KALDIRILDI:** Streamlit uygulaması artık kullanılmıyor.
+> Tüm işlemler FastAPI backend üzerinden yapılmaktadır.
+> Eski URL: https://aliyilmaznotdefterim.streamlit.app/
 
 ## Erişim Kontrolü
 
@@ -477,6 +480,63 @@ get_companies_with_counts() -> list[dict]
 clear_cache()
 ```
 
+## Summary Pipeline
+
+Notlar/kartlar için özet (summary) sistemi. Kart önizlemelerinde tam içerik yerine özet gösterilir.
+
+### Backend (services/drive.py)
+
+```python
+generate_summary(content: str, max_chars: int = 200) -> str
+```
+
+**Strateji:**
+1. İçerik paragraflara ayrılır (`\n\n` ile)
+2. İlk anlamlı paragraf alınır
+3. 200 karakteri aşarsa kelime sınırında kesilir ve "..." eklenir
+
+**API yanıtı:**
+```json
+{
+    "id": "file_id",
+    "title": "Başlık",
+    "content": "Tam içerik...",
+    "summary": "İlk paragraftan üretilen özet...",
+    ...
+}
+```
+
+### Frontend (static/index.html)
+
+**Varsayılan görünüm:** `item.summary` (veya fallback: `item.content`)
+**Genişletilmiş görünüm:** `item.content`
+
+```javascript
+// Kart body'sinde:
+x-text="expanded ? item.content : (item.summary || item.content)"
+
+// Genişletme butonu kontrolü:
+needsExpand(item) {
+    if (item.summary && item.summary !== item.content) return true;
+    // Fallback: satır/karakter kontrolü
+}
+```
+
+**CONFIG ayarı:**
+```javascript
+CONFIG.card.summaryMaxChars = 200  // Backend ile eşleşir
+```
+
+### quickSave() ile Summary
+
+Hızlı not kaydında client-side summary üretilir (optimistic UI için):
+
+```javascript
+const summary = content.length > 200 ? content.substring(0, 197) + '...' : content;
+```
+
+API çağrısından sonra backend'den gerçek summary gelir.
+
 ## Performans Optimizasyonları
 
 ### Backend Cache (TTL)
@@ -599,18 +659,30 @@ python-multipart>=0.0.6
 
 ## Lokal Geliştirme
 
+### Tek Doğru Başlatma Yöntemi
+
+**Komut dosyası:** `not-defterim.command` (çift tıkla)
+
+veya
+
+**Terminal:**
 ```bash
 cd /Users/alylmztr/Documents/GitHub/alylmz-kisisel-not-defterim
-
-# Environment variables ayarla
 export APP_SECRET_KEY="1102"
 export GCP_CREDENTIALS='{"type":"service_account",...}'
-
-# Sunucuyu başlat
-uvicorn main:app --reload --port 8510
+uvicorn main:app --host 0.0.0.0 --port 8510
 ```
 
 **URL:** http://localhost:8510?key=1102
+
+### Geliştirici Modu (hot-reload)
+
+```bash
+uvicorn main:app --reload --port 8510
+```
+
+> **NOT:** `streamlit run app.py` artık geçerli değildir.
+> Streamlit uygulaması `app_legacy_streamlit.py` olarak arşivlenmiştir.
 
 ## Error Logging
 

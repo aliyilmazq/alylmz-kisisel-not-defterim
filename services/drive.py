@@ -215,6 +215,34 @@ def parse_body(body: str, fallback_title: str = "") -> tuple[str, str]:
     return title, content
 
 
+def generate_summary(content: str, max_chars: int = 200) -> str:
+    """
+    İçerikten özet üret.
+    Strateji: İlk anlamlı paragraf + karakter limiti.
+    """
+    if not content or not content.strip():
+        return ""
+
+    # Paragraflarına ayır
+    paragraphs = [p.strip() for p in content.split('\n\n') if p.strip()]
+
+    if not paragraphs:
+        paragraphs = [p.strip() for p in content.split('\n') if p.strip()]
+
+    if not paragraphs:
+        return ""
+
+    summary = paragraphs[0]
+
+    if len(summary) > max_chars:
+        truncate_at = summary[:max_chars].rfind(' ')
+        if truncate_at == -1:
+            truncate_at = max_chars
+        summary = summary[:truncate_at].rstrip('.,;:!?') + "..."
+
+    return summary
+
+
 def get_items(folder_type: str) -> list[dict]:
     """Google Drive'dan dosyaları çek (cached)"""
     cache_key = f"items_{folder_type}"
@@ -249,6 +277,7 @@ def get_items(folder_type: str) -> list[dict]:
             "filename": file['name'],
             "title": title,
             "content": body_content,
+            "summary": generate_summary(body_content),
             "proje": frontmatter.get("proje"),
             "created": frontmatter.get("created"),
             "modified": file['modifiedTime'],

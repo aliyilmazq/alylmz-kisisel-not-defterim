@@ -223,11 +223,11 @@
                     </div>
 
                     <!-- Card Body -->
-                    <div x-show="item.content" class="px-4 py-2">
+                    <div x-show="item.content || item.summary" class="px-4 py-2">
                         <p class="text-sm text-gray-600 whitespace-pre-wrap break-words"
                            :class="expanded ? '' : 'line-clamp-' + CONFIG.card.contentLines"
-                           x-text="item.content"></p>
-                        <button x-show="needsExpand(item.content)"
+                           x-text="expanded ? item.content : (item.summary || item.content)"></p>
+                        <button x-show="needsExpand(item)"
                                 @click.stop="expanded = !expanded"
                                 class="text-xs text-blue-500 hover:text-blue-700 mt-1 font-medium"
                                 x-text="expanded ? '▲ Daralt' : '▼ Devamını gör'"></button>
@@ -325,7 +325,8 @@
             card: {
                 showDate: true,
                 contentLines: 2,
-                expandable: true
+                expandable: true,
+                summaryMaxChars: 200
             },
             // Tab düzeni
             tabs: {
@@ -609,12 +610,17 @@
                     return `${day} ${months[month] || ''}`;
                 },
 
-                // İçerik genişletme gerekli mi? (satır sayısı veya karakter uzunluğu)
-                needsExpand(content) {
-                    if (!content || !CONFIG.card.expandable) return false;
-                    const lines = content.split('\n').length;
+                // İçerik genişletme gerekli mi? (summary/content farklıysa veya uzun içerik)
+                needsExpand(item) {
+                    if (!item.content || !CONFIG.card.expandable) return false;
+
+                    // Summary varsa ve content'ten farklıysa, genişletme gerekli
+                    if (item.summary && item.summary !== item.content) return true;
+
+                    // Fallback: satır/karakter kontrolü
+                    const lines = item.content.split('\n').length;
                     const avgCharsPerLine = 40; // Mobil ekranda yaklaşık
-                    const estimatedLines = Math.ceil(content.length / avgCharsPerLine);
+                    const estimatedLines = Math.ceil(item.content.length / avgCharsPerLine);
                     return lines > CONFIG.card.contentLines || estimatedLines > CONFIG.card.contentLines;
                 },
 
@@ -636,16 +642,37 @@
                 },
 
                 async quickSave() {
-                    if (!this.quickNote.trim()) return;
-                    const lines = this.quickNote.trim().split('\n');
-                    const title = lines[0].substring(0, 100);
+                    const trimmed = this.quickNote.trim();
+                    if (!trimmed) return;
+
+                    const lines = trimmed.split('\n');
+
+                    // İlk boş olmayan satırı bul
+                    let title = lines[0].trim();
+                    if (!title) {
+                        const firstNonEmpty = lines.find(l => l.trim());
+                        title = firstNonEmpty ? firstNonEmpty.trim() : 'Başlıksız Not';
+                    }
+                    title = title.substring(0, 100);
+
                     const content = lines.slice(1).join('\n').trim();
+
+                    // Client-side summary (optimistic UI için)
+                    const summary = content ? (content.length > 200 ? content.substring(0, 197) + '...' : content) : '';
 
                     // Optimistic UI
                     this.quickNote = '';
                     this.counts.inbox = (this.counts.inbox || 0) + 1;
                     if (this.activeTab === 'inbox') {
-                        this.items.unshift({ id: 'temp_' + Date.now(), title, content, pinned: false, proje: null, created: new Date().toISOString().split('T')[0] });
+                        this.items.unshift({
+                            id: 'temp_' + Date.now(),
+                            title,
+                            content,
+                            summary,
+                            pinned: false,
+                            proje: null,
+                            created: new Date().toISOString().split('T')[0]
+                        });
                     }
 
                     // API çağrısı arka planda, sonra gerçek ID ile güncelle
