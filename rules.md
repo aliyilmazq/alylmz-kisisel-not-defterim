@@ -778,3 +778,10 @@ git reset --hard <commit_hash> && git push --force
 # Son commit'i geri al
 git revert HEAD --no-edit && git push
 ```
+
+## Claude Code Tercihleri
+
+**Otomatik İşlemler (sormadan yap):**
+- Git commit ve push - değişiklik yapıldığında otomatik commit at ve push et
+- Render MCP - deploy durumu kontrolü, log okuma vb. için her zaman MCP kullan
+- Bu dosyayı (rules.md) güncel tut
