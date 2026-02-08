@@ -18,30 +18,40 @@
     </script>
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
-        * { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; }
+        :root {
+            --bg: linear-gradient(180deg, #f7f9fb 0%, #fdfdfd 40%, #ffffff 100%);
+            --card-shadow: 0 12px 30px -18px rgba(0,0,0,0.25);
+            --border: #e8ecf2;
+        }
+        * { font-family: 'Manrope', 'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif; }
+        h1, h2, h3 { font-family: 'Space Grotesk', 'Manrope', sans-serif; letter-spacing: -0.01em; }
         body {
             padding-top: env(safe-area-inset-top);
             padding-bottom: env(safe-area-inset-bottom);
             -webkit-tap-highlight-color: transparent;
+            background: var(--bg);
         }
-        .tab-active { background: #3b82f6; color: white; }
-        .tab-inactive { background: #f3f4f6; color: #374151; }
+        .tab-active { background: #2563eb; color: white; box-shadow: 0 8px 20px -14px #2563eb; }
+        .tab-inactive { background: #f3f4f6; color: #374151; border: 1px solid #e5e7eb; }
         [x-cloak] { display: none !important; }
         .action-btn {
-            padding: 0.5rem 0.25rem;
-            font-size: 0.75rem;
-            background: white;
+            padding: 0.55rem 0.65rem;
+            font-size: 0.8rem;
+            background: #f9fafb;
             border: 1px solid #e5e7eb;
-            border-radius: 0.5rem;
+            border-radius: 0.75rem;
             transition: all 0.15s;
             text-align: center;
             white-space: nowrap;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
         }
-        .action-btn:hover { background: #f3f4f6; }
-        .action-btn:active { background: #e5e7eb; }
-        .action-btn.danger { color: #ef4444; }
+        .action-btn:hover { background: #eef2ff; border-color: #c7d2fe; color: #1d4ed8; }
+        .action-btn:active { background: #e0e7ff; }
+        .action-btn.danger { color: #ef4444; border-color: #fecdd3; background: #fff1f2; }
         /* Line clamp utilities */
         .line-clamp-1, .line-clamp-2, .line-clamp-3, .line-clamp-4, .line-clamp-5 {
             display: -webkit-box;
@@ -60,6 +70,37 @@
             overflow: hidden;
             text-overflow: ellipsis;
         }
+        .card {
+            box-shadow: var(--card-shadow);
+            border: 1px solid var(--border);
+        }
+        .card:hover { transform: translateY(-1px); transition: transform 0.18s ease, box-shadow 0.18s ease; }
+        .summary-chip {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 0.85rem;
+            padding: 0.6rem 0.75rem;
+            font-size: 0.9rem;
+            color: #475569;
+        }
+        .gradient-fade {
+            background: linear-gradient(180deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.9) 40%, #fff 100%);
+        }
+        .toast-container { position: fixed; top: 18px; right: 16px; z-index: 999; display: flex; flex-direction: column; gap: 8px; }
+        .toast {
+            min-width: 220px;
+            background: #0f172a;
+            color: #f8fafc;
+            padding: 12px 14px;
+            border-radius: 12px;
+            box-shadow: 0 12px 30px -16px rgba(0,0,0,0.4);
+            font-size: 0.9rem;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .toast.success { background: #15803d; }
+        .toast.error { background: #b91c1c; }
         /* Skeleton loading animation */
         .skeleton {
             background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
@@ -72,7 +113,17 @@
         }
     </style>
 </head>
-<body class="bg-gray-50 min-h-screen" x-data="app()" x-init="init()">
+<body class="min-h-screen" x-data="app()" x-init="init()">
+
+    <!-- Toasts -->
+    <div class="toast-container" x-cloak>
+        <template x-for="toast in toasts" :key="toast.id">
+            <div class="toast" :class="toast.type">
+                <span x-text="toast.icon"></span>
+                <span x-text="toast.message"></span>
+            </div>
+        </template>
+    </div>
 
     <!-- Login Screen -->
     <div x-show="!authenticated" x-cloak class="min-h-screen flex items-center justify-center p-4">
@@ -200,45 +251,54 @@
             </template>
         </div>
 
+        <!-- Arama -->
+        <div x-show="!loading" class="px-4 pb-2">
+            <div class="flex items-center gap-2 bg-white border border-gray-200 rounded-xl px-3 py-2 shadow-sm">
+                <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                <input type="search" x-model="searchQuery" placeholder="Başlık, içerik ara..." class="flex-1 focus:outline-none text-sm">
+                <button x-show="searchQuery" @click="searchQuery=''" class="text-xs text-blue-600 hover:underline">Temizle</button>
+            </div>
+        </div>
+
         <!-- Items (Config-driven Cards) -->
         <div x-show="!loading" class="px-4 space-y-3">
-            <template x-if="items.length === 0">
-                <p class="text-center text-gray-400 py-8">Henüz öğe yok</p>
+            <template x-if="filteredItems().length === 0">
+                <p class="text-center text-gray-400 py-8">Hiç sonuç yok</p>
             </template>
 
-            <template x-for="item in items" :key="item.id">
-                <div class="bg-white rounded-xl border border-gray-200 overflow-hidden" x-data="{ expanded: false }">
+            <template x-for="item in filteredItems()" :key="item.id">
+                <div class="bg-white rounded-2xl overflow-hidden card relative group cursor-pointer" x-data="{ expanded: false }">
                     <!-- Card Header -->
-                    <div class="px-4 py-3 border-b border-gray-100">
+                    <div class="px-4 py-3 border-b border-gray-100" @click="expanded = !expanded">
                         <div class="flex items-start gap-2">
                             <span x-show="item.pinned" class="text-sm flex-shrink-0">📌</span>
-                            <h3 class="font-medium text-gray-800 flex-1 break-words" x-text="item.title"></h3>
-                            <span x-show="item.proje" class="text-xs text-gray-400 flex-shrink-0">📁</span>
+                            <h3 class="font-semibold text-gray-800 flex-1 break-words" x-text="item.title"></h3>
+                            <span x-show="item.proje" class="text-[11px] text-gray-500 flex-shrink-0 px-2 py-1 rounded-full border border-gray-200 bg-gray-50">📁</span>
                         </div>
-                        <div x-show="item.proje || item.created" class="flex items-center gap-2 mt-1 flex-wrap">
-                            <span x-show="item.proje" class="text-xs text-blue-500 truncate-proje" x-text="item.proje" :title="item.proje"></span>
+                        <div x-show="item.proje || item.created" class="flex items-center gap-2 mt-1 flex-wrap text-xs text-gray-500">
+                            <span x-show="item.proje" class="text-xs text-blue-600 truncate-proje font-medium" x-text="item.proje" :title="item.proje"></span>
                             <span x-show="item.proje && item.created" class="text-xs text-gray-300">•</span>
                             <span x-show="item.created" class="text-xs text-gray-400" x-text="formatDate(item.created)"></span>
                         </div>
                     </div>
 
                     <!-- Card Body -->
-                    <div x-show="item.content || item.summary" class="px-4 py-2">
-                        <p class="text-sm text-gray-600 whitespace-pre-wrap break-words"
+                    <div x-show="item.content || item.summary || item.title" class="px-4 py-3 relative" @click="expanded = !expanded">
+                        <p class="text-sm text-gray-700 whitespace-pre-wrap break-words summary-chip"
                            :class="expanded ? '' : 'line-clamp-' + CONFIG.card.contentLines"
-                           x-text="expanded ? item.content : (item.summary || item.content)"></p>
-                        <button x-show="needsExpand(item)"
-                                @click.stop="expanded = !expanded"
-                                class="text-xs text-blue-500 hover:text-blue-700 mt-1 font-medium"
-                                x-text="expanded ? '▲ Daralt' : '▼ Devamını gör'"></button>
+                           x-text="displayText(item, expanded)"></p>
+                        <div x-show="!expanded && needsExpand(item)" class="gradient-fade absolute inset-x-0 bottom-0 h-12 pointer-events-none"></div>
+                        <span x-show="!expanded && needsExpand(item)" class="text-[11px] text-blue-600 font-semibold mt-2 inline-flex items-center gap-1">
+                            ▼ Devamını gör
+                        </span>
                     </div>
 
                     <!-- Card Actions (Config-driven) -->
-                    <div class="px-2 py-2 bg-gray-50">
+                    <div class="px-2 py-2 bg-gray-50" @click.stop>
                         <template x-for="(row, rowIndex) in getActions()" :key="rowIndex">
                             <div class="grid gap-1" :class="'grid-cols-' + row.length" :style="rowIndex > 0 ? 'margin-top: 0.25rem' : ''">
                                 <template x-for="action in row" :key="action.id">
-                                    <button @click="executeAction(action.id, item)" class="action-btn" :class="action.danger ? 'danger' : ''" x-text="action.icon + ' ' + getActionLabel(action, item)"></button>
+                                    <button @click.stop="executeAction(action.id, item)" class="action-btn" :class="action.danger ? 'danger' : ''" x-text="action.icon + ' ' + getActionLabel(action, item)"></button>
                                 </template>
                             </div>
                         </template>
@@ -324,9 +384,9 @@
             // Kart ayarları
             card: {
                 showDate: true,
-                contentLines: 2,
+                contentLines: 3,
                 expandable: true,
-                summaryMaxChars: 200
+                summaryMaxChars: 260
             },
             // Tab düzeni
             tabs: {
@@ -432,6 +492,8 @@
                 loading: false,
                 companies: [],
                 config: {},
+                searchQuery: '',
+                toasts: [],
 
                 currentFilter: 'Tümü',
 
@@ -599,6 +661,30 @@
                     return action.label;
                 },
 
+                filteredItems() {
+                    const q = this.searchQuery.trim().toLowerCase();
+                    if (!q) return this.items;
+                    return this.items.filter(i => {
+                        const title = (i.title || '').toLowerCase();
+                        const content = (i.content || '').toLowerCase();
+                        const summary = (i.summary || '').toLowerCase();
+                        return title.includes(q) || content.includes(q) || summary.includes(q);
+                    });
+                },
+
+                displayText(item, expanded) {
+                    const summary = item.summary || item.title || '';
+                    const full = item.content || summary;
+                    return expanded ? full : summary;
+                },
+
+                pushToast(message, type = 'info') {
+                    const id = Date.now() + Math.random();
+                    const icon = type === 'success' ? '✅' : type === 'error' ? '⚠️' : 'ℹ️';
+                    this.toasts.push({ id, message, type, icon });
+                    setTimeout(() => { this.toasts = this.toasts.filter(t => t.id !== id); }, 2800);
+                },
+
                 // Tarih formatla: "2026-02-02" → "2 Şubat"
                 formatDate(dateStr) {
                     if (!dateStr) return '';
@@ -613,15 +699,18 @@
 
                 // İçerik genişletme gerekli mi? (summary/content farklıysa veya uzun içerik)
                 needsExpand(item) {
-                    if (!item.content || !CONFIG.card.expandable) return false;
+                    if (!CONFIG.card.expandable) return false;
+
+                    const text = item.content || item.summary || item.title || '';
+                    if (!text) return false;
 
                     // Summary varsa ve content'ten farklıysa, genişletme gerekli
-                    if (item.summary && item.summary !== item.content) return true;
+                    if (item.summary && item.content && item.summary !== item.content) return true;
 
                     // Fallback: satır/karakter kontrolü
-                    const lines = item.content.split('\n').length;
-                    const avgCharsPerLine = 40; // Mobil ekranda yaklaşık
-                    const estimatedLines = Math.ceil(item.content.length / avgCharsPerLine);
+                    const lines = text.split('\n').length;
+                    const avgCharsPerLine = 42; // Mobil ekranda yaklaşık
+                    const estimatedLines = Math.ceil(text.length / avgCharsPerLine);
                     return lines > CONFIG.card.contentLines || estimatedLines > CONFIG.card.contentLines;
                 },
 
@@ -659,7 +748,7 @@
                     const content = lines.slice(1).join('\n').trim();
 
                     // Client-side summary (optimistic UI için)
-                    const summary = content ? (content.length > 200 ? content.substring(0, 197) + '...' : content) : '';
+                    const summary = content ? (content.length > CONFIG.card.summaryMaxChars ? content.substring(0, CONFIG.card.summaryMaxChars - 3) + '...' : content) : title;
 
                     // Optimistic UI
                     this.quickNote = '';
@@ -678,8 +767,8 @@
 
                     // API çağrısı arka planda, sonra gerçek ID ile güncelle
                     this.api('POST', '/api/items', { title, content, folder: 'inbox' })
-                        .then(() => { if (this.activeTab === 'inbox') this.loadItems(); })
-                        .catch(e => { console.error('Quick save error:', e); this.loadItems(); this.loadCounts(); });
+                        .then(() => { if (this.activeTab === 'inbox') this.loadItems(); this.pushToast('Hızlı not kaydedildi', 'success'); })
+                        .catch(e => { console.error('Quick save error:', e); this.pushToast('Kaydetme hatası', 'error'); this.loadItems(); this.loadCounts(); });
                 },
 
                 // ============ CARD ACTIONS (Tek Kaynak) ============
@@ -708,7 +797,8 @@
                     this.counts[toFolder] = (this.counts[toFolder] || 0) + 1;
                     // API çağrısı arka planda
                     this.api('POST', `/api/items/${item.id}/move`, { from_folder: this.activeTab, to_folder: toFolder })
-                        .catch(e => { console.error('Move error:', e); this.loadItems(); this.loadCounts(); });
+                        .then(() => this.pushToast('Taşındı', 'success'))
+                        .catch(e => { console.error('Move error:', e); this.pushToast('Taşıma hatası', 'error'); this.loadItems(); this.loadCounts(); });
                 },
 
                 async deleteItem(item) {
@@ -718,7 +808,8 @@
                     this.counts[this.activeTab] = Math.max(0, (this.counts[this.activeTab] || 1) - 1);
                     // API çağrısı arka planda
                     this.api('DELETE', `/api/items/${item.id}?folder=${this.activeTab}`)
-                        .catch(e => { console.error('Delete error:', e); this.loadItems(); this.loadCounts(); });
+                        .then(() => this.pushToast('Silindi', 'success'))
+                        .catch(e => { console.error('Delete error:', e); this.pushToast('Silme hatası', 'error'); this.loadItems(); this.loadCounts(); });
                 },
 
                 async togglePin(item) {
@@ -727,7 +818,8 @@
                     this.items = [...this.items].sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0));
                     // API çağrısı arka planda
                     this.api('POST', `/api/items/${item.id}/pin?folder=${this.activeTab}`)
-                        .catch(e => { console.error('Pin error:', e); this.loadItems(); this.loadCounts(); });
+                        .then(() => this.pushToast(item.pinned ? 'Sabitlendi' : 'Sabit kaldırıldı', 'success'))
+                        .catch(e => { console.error('Pin error:', e); this.pushToast('Sabitleme hatası', 'error'); this.loadItems(); this.loadCounts(); });
                 },
 
                 // ============ MODALS ============
@@ -752,15 +844,17 @@
                             content: this.formData.content,
                             proje: this.editingItem.proje,
                             pinned: this.editingItem.pinned || false
-                        }).catch(e => { console.error('Save error:', e); this.loadItems(); });
+                        }).then(() => this.pushToast('Güncellendi', 'success'))
+                          .catch(e => { console.error('Save error:', e); this.pushToast('Kaydetme hatası', 'error'); this.loadItems(); });
                     } else {
                         // Yeni öğe için API beklenmeli
                         try {
                             await this.api('POST', '/api/items', this.formData);
                             this.showModal = false;
                             this.loadCounts();
+                            this.pushToast('Eklendi', 'success');
                             if (this.activeTab === this.formData.folder) this.loadItems();
-                        } catch (e) { console.error('Save error:', e); }
+                        } catch (e) { console.error('Save error:', e); this.pushToast('Kaydetme hatası', 'error'); }
                     }
                 },
 
@@ -781,17 +875,18 @@
                     this.showProjeModal = false;
                     // API çağrısı arka planda
                     this.api('POST', `/api/items/${this.projeItem.id}/proje`, { folder: this.activeTab, proje })
-                        .catch(e => { console.error('Proje error:', e); this.loadItems(); });
+                        .then(() => this.pushToast('Proje güncellendi', 'success'))
+                        .catch(e => { console.error('Proje error:', e); this.pushToast('Proje güncellenemedi', 'error'); this.loadItems(); });
                 },
 
                 async exportItems() {
                     try {
                         const name = this.currentFilter === 'Tümü' ? this.activeTab : this.currentFilter;
                         const data = await this.api('POST', '/api/export', { folder: this.activeTab, filter: this.currentFilter, name });
-                        alert('Export başarılı: ' + data.filename);
+                        this.pushToast('Export: ' + data.filename, 'success');
                     } catch (e) {
                         console.error('Export error:', e);
-                        alert('Export hatası');
+                        this.pushToast('Export hatası', 'error');
                     }
                 }
             }

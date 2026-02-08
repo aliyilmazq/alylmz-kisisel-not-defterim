@@ -215,13 +215,10 @@ def parse_body(body: str, fallback_title: str = "") -> tuple[str, str]:
     return title, content
 
 
-def generate_summary(content: str, max_chars: int = 200) -> str:
-    """
-    İçerikten özet üret.
-    Strateji: İlk anlamlı paragraf + karakter limiti.
-    """
+def generate_summary(content: str, max_chars: int = 260, fallback: str | None = None) -> str:
+    """İçerikten özet üret, yoksa fallback'e dön."""
     if not content or not content.strip():
-        return ""
+        return (fallback or "")[:max_chars].rstrip() if fallback else ""
 
     # Paragraflarına ayır
     paragraphs = [p.strip() for p in content.split('\n\n') if p.strip()]
@@ -230,7 +227,7 @@ def generate_summary(content: str, max_chars: int = 200) -> str:
         paragraphs = [p.strip() for p in content.split('\n') if p.strip()]
 
     if not paragraphs:
-        return ""
+        return (fallback or "")[:max_chars].rstrip() if fallback else ""
 
     summary = paragraphs[0]
 
@@ -253,7 +250,7 @@ def _fetch_file_content(service, file_info: dict) -> dict:
         "filename": file_info['name'],
         "title": title,
         "content": body_content,
-        "summary": generate_summary(body_content),
+        "summary": generate_summary(body_content, fallback=title),
         "proje": frontmatter.get("proje"),
         "created": frontmatter.get("created"),
         "modified": file_info['modifiedTime'],
