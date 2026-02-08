@@ -75,7 +75,8 @@
             border: 1px solid var(--border);
         }
         .card:hover { transform: translateY(-1px); transition: transform 0.18s ease, box-shadow 0.18s ease; }
-        .summary-chip {
+        /* Daraltılmış - chip görünümü */
+        .summary-collapsed {
             background: #f8fafc;
             border: 1px solid #e2e8f0;
             border-radius: 0.85rem;
@@ -83,9 +84,27 @@
             font-size: 0.9rem;
             color: #475569;
         }
+        /* Genişletilmiş - normal metin */
+        .summary-expanded {
+            font-size: 0.9rem;
+            color: #374151;
+            padding: 0.25rem 0;
+        }
         .gradient-fade {
             background: linear-gradient(180deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.9) 40%, #fff 100%);
         }
+        /* Unified dropdown styling */
+        .dropdown-item {
+            width: 100%;
+            padding: 0.625rem 0.875rem;
+            text-align: left;
+            font-size: 0.875rem;
+            border-radius: 0.375rem;
+        }
+        .dropdown-item:hover { background-color: #f9fafb; }
+        .dropdown-item-back { color: #2563eb; font-weight: 500; }
+        .dropdown-item-company { font-weight: 500; }
+        .dropdown-item-meta { color: #9ca3af; font-size: 0.75rem; }
         .toast-container { position: fixed; top: 18px; right: 16px; z-index: 999; display: flex; flex-direction: column; gap: 8px; }
         .toast {
             min-width: 220px;
@@ -192,30 +211,30 @@
                 <!-- Hierarchical Dropdown - Filter için -->
                 <div class="relative flex-1" x-data="hierarchicalDropdown('filter')" @click.away="open = false">
                     <button @click="open = !open" class="w-full flex items-center justify-between px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm">
-                        <span x-text="$store.app.currentFilter"></span>
+                        <span x-text="selectedCompany ? (selectedCompany + ' →') : $store.app.currentFilter"></span>
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
                     </button>
                     <div x-show="open" x-transition class="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-50 max-h-64 overflow-y-auto">
                         <template x-if="!selectedCompany">
                             <div>
-                                <button @click="select('Tümü')" class="w-full px-3 py-2 text-left text-sm hover:bg-gray-50">Tümü</button>
-                                <button @click="select('Projesi Yok')" class="w-full px-3 py-2 text-left text-sm hover:bg-gray-50">Projesi Yok</button>
+                                <button @click="select('Tümü')" class="dropdown-item">Tümü</button>
+                                <button @click="select('Projesi Yok')" class="dropdown-item">Projesi Yok</button>
                                 <div class="border-t border-gray-100"></div>
                                 <template x-for="c in $store.app.companies" :key="c.name">
-                                    <button @click="drillDown(c.name)" class="w-full px-3 py-2 text-left text-sm hover:bg-gray-50 flex justify-between items-center">
-                                        <span x-text="c.name"></span>
-                                        <span class="text-gray-400 text-xs" x-text="'(' + c.count + ') →'"></span>
+                                    <button @click="drillDown(c.name)" class="dropdown-item flex justify-between items-center">
+                                        <span class="dropdown-item-company" x-text="c.name"></span>
+                                        <span class="dropdown-item-meta" x-text="'(' + c.count + ') →'"></span>
                                     </button>
                                 </template>
                             </div>
                         </template>
                         <template x-if="selectedCompany">
                             <div>
-                                <button @click="goBack()" class="w-full px-3 py-2 text-left text-sm hover:bg-gray-50 text-blue-500">← Geri</button>
-                                <button @click="select(selectedCompany + ' (Tümü)')" class="w-full px-3 py-2 text-left text-sm hover:bg-gray-50 font-medium" x-text="selectedCompany + ' (Tümü)'"></button>
+                                <button @click="goBack()" class="dropdown-item dropdown-item-back">← Geri</button>
+                                <button @click="select(selectedCompany + ' (Tümü)')" class="dropdown-item dropdown-item-company" x-text="selectedCompany + ' (Tümü)'"></button>
                                 <div class="border-t border-gray-100"></div>
                                 <template x-for="p in $store.app.getProjects(selectedCompany)" :key="p">
-                                    <button @click="select(selectedCompany + ' - ' + p)" class="w-full px-3 py-2 text-left text-sm hover:bg-gray-50" x-text="p"></button>
+                                    <button @click="select(selectedCompany + ' - ' + p)" class="dropdown-item" x-text="p"></button>
                                 </template>
                             </div>
                         </template>
@@ -284,10 +303,12 @@
 
                     <!-- Card Body -->
                     <div x-show="item.content || item.summary || item.title" class="px-4 py-3 relative" @click="expanded = !expanded">
-                        <p class="text-sm text-gray-700 whitespace-pre-wrap break-words summary-chip"
-                           :class="expanded ? '' : 'line-clamp-' + CONFIG.card.contentLines"
+                        <p class="text-sm text-gray-700 whitespace-pre-wrap break-words"
+                           :class="expanded ? 'summary-expanded' : ('summary-collapsed line-clamp-' + CONFIG.card.contentLines)"
                            x-text="displayText(item, expanded)"></p>
-                        <div x-show="!expanded && needsExpand(item)" class="gradient-fade absolute inset-x-0 bottom-0 h-12 pointer-events-none"></div>
+                        <div x-show="!expanded && needsExpand(item)"
+                             class="gradient-fade absolute inset-x-0 bottom-0 pointer-events-none"
+                             :style="'height: ' + (CONFIG.card.contentLines * 1.4 + 0.5) + 'rem'"></div>
                         <span x-show="!expanded && needsExpand(item)" class="text-[11px] text-blue-600 font-semibold mt-2 inline-flex items-center gap-1">
                             ▼ Devamını gör
                         </span>
@@ -353,22 +374,22 @@
             <div class="p-2">
                 <template x-if="!selectedCompany">
                     <div>
-                        <button @click="select(null)" class="w-full px-4 py-3 text-left hover:bg-gray-50 rounded-lg text-gray-500">Proje Yok</button>
+                        <button @click="select(null)" class="dropdown-item text-gray-500">Proje Yok</button>
                         <div class="border-t border-gray-100 my-1"></div>
                         <template x-for="c in $store.app.companies" :key="c.name">
-                            <button @click="drillDown(c.name)" class="w-full px-4 py-3 text-left hover:bg-gray-50 rounded-lg flex justify-between items-center">
-                                <span class="font-medium" x-text="c.name"></span>
-                                <span class="text-gray-400 text-sm" x-text="'(' + c.count + ') →'"></span>
+                            <button @click="drillDown(c.name)" class="dropdown-item flex justify-between items-center">
+                                <span class="dropdown-item-company" x-text="c.name"></span>
+                                <span class="dropdown-item-meta" x-text="'(' + c.count + ') →'"></span>
                             </button>
                         </template>
                     </div>
                 </template>
                 <template x-if="selectedCompany">
                     <div>
-                        <button @click="goBack()" class="w-full px-4 py-3 text-left hover:bg-gray-50 rounded-lg text-blue-500">← Geri</button>
+                        <button @click="goBack()" class="dropdown-item dropdown-item-back">← Geri</button>
                         <div class="border-t border-gray-100 my-1"></div>
                         <template x-for="p in $store.app.getProjects(selectedCompany)" :key="p">
-                            <button @click="select(selectedCompany + ' - ' + p)" class="w-full px-4 py-3 text-left hover:bg-gray-50 rounded-lg text-sm" x-text="p"></button>
+                            <button @click="select(selectedCompany + ' - ' + p)" class="dropdown-item" x-text="p"></button>
                         </template>
                     </div>
                 </template>
@@ -386,7 +407,8 @@
                 showDate: true,
                 contentLines: 3,
                 expandable: true,
-                summaryMaxChars: 260
+                summaryMaxChars: 260,
+                charsPerLine: { mobile: 38, tablet: 50, desktop: 65 }
             },
             // Tab düzeni
             tabs: {
@@ -672,10 +694,27 @@
                     });
                 },
 
+                getCardTexts(item) {
+                    const summary = item.summary || '';
+                    const content = item.content || '';
+                    const title = item.title || '';
+                    return {
+                        collapsed: summary || content || title,
+                        expanded: content || summary || title
+                    };
+                },
+
+                getCharsPerLine() {
+                    const w = window.innerWidth;
+                    const c = CONFIG.card.charsPerLine;
+                    if (w < 640) return c.mobile;
+                    if (w < 1024) return c.tablet;
+                    return c.desktop;
+                },
+
                 displayText(item, expanded) {
-                    const summary = item.summary || item.title || '';
-                    const full = item.content || summary;
-                    return expanded ? full : summary;
+                    const texts = this.getCardTexts(item);
+                    return expanded ? texts.expanded : texts.collapsed;
                 },
 
                 pushToast(message, type = 'info') {
@@ -701,17 +740,21 @@
                 needsExpand(item) {
                     if (!CONFIG.card.expandable) return false;
 
-                    const text = item.content || item.summary || item.title || '';
+                    const texts = this.getCardTexts(item);
+                    if (!texts.collapsed && !texts.expanded) return false;
+
+                    // Collapsed ve expanded farklıysa, genişletme gerekli
+                    if (texts.collapsed !== texts.expanded) return true;
+
+                    const text = texts.collapsed;
                     if (!text) return false;
 
-                    // Summary varsa ve content'ten farklıysa, genişletme gerekli
-                    if (item.summary && item.content && item.summary !== item.content) return true;
-
-                    // Fallback: satır/karakter kontrolü
+                    // Satır/karakter kontrolü (responsive)
                     const lines = text.split('\n').length;
-                    const avgCharsPerLine = 42; // Mobil ekranda yaklaşık
-                    const estimatedLines = Math.ceil(text.length / avgCharsPerLine);
-                    return lines > CONFIG.card.contentLines || estimatedLines > CONFIG.card.contentLines;
+                    if (lines > CONFIG.card.contentLines) return true;
+
+                    const estimatedLines = Math.ceil(text.length / this.getCharsPerLine());
+                    return estimatedLines > CONFIG.card.contentLines;
                 },
 
                 // ============ ACTIONS ============
