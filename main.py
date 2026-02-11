@@ -2,6 +2,8 @@
 Kişisel Not Defterim - FastAPI Backend
 """
 import os
+import sys
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, Query, Request, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -18,7 +20,49 @@ from services.drive import (
     log_error
 )
 
-app = FastAPI(title="Kişisel Not Defterim API")
+# macOS Anımsatıcılar senkronizasyonu
+def sync_tasks_to_reminders():
+    """Mevcut görevleri Anımsatıcılar'a senkronize et (sadece macOS)"""
+    if sys.platform != "darwin":
+        return
+
+    try:
+        from services.reminders import add_reminder_with_daily_recurrence, DEFAULT_LIST_NAME
+        print(f"📋 Anımsatıcılar senkronize ediliyor: {DEFAULT_LIST_NAME}")
+
+        tasks = get_items("gorevler")
+        if not tasks:
+            print("ℹ️  Görev bulunamadı.")
+            return
+
+        for task in tasks:
+            title = task.get("title", "Başlıksız")
+            proje = task.get("proje")
+            content = task.get("content", "")
+
+            proje_info = f" [{proje}]" if proje else ""
+            reminder_title = f"{title}{proje_info}"
+
+            add_reminder_with_daily_recurrence(
+                title=reminder_title,
+                notes=content[:500] if content else "",
+                remind_time="09:00"
+            )
+
+        print(f"✅ {len(tasks)} görev Anımsatıcılar'a senkronize edildi.")
+    except Exception as e:
+        print(f"⚠️  Anımsatıcılar senkronizasyonu atlandı: {e}")
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Uygulama başlangıcında çalışacak işlemler"""
+    # Startup: Mevcut görevleri Anımsatıcılar'a senkronize et
+    sync_tasks_to_reminders()
+    yield
+    # Shutdown: Temizlik işlemleri (şimdilik yok)
+
+app = FastAPI(title="Kişisel Not Defterim API", lifespan=lifespan)
 
 
 # Global Exception Handler - Hataları Drive'a logla

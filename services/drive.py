@@ -3,6 +3,7 @@ Google Drive API Service
 Tüm Drive işlemleri bu modülde
 """
 import os
+import sys
 import json
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from google.oauth2 import service_account
@@ -11,6 +12,19 @@ from googleapiclient.http import MediaInMemoryUpload
 from google.auth.transport.requests import AuthorizedSession
 from datetime import datetime
 import time
+
+# macOS Anımsatıcılar entegrasyonu (sadece macOS'ta ve lokal çalışırken)
+_reminders_available = False
+if sys.platform == "darwin":
+    try:
+        from services.reminders import (
+            add_reminder_with_daily_recurrence,
+            complete_reminder,
+            delete_reminder
+        )
+        _reminders_available = True
+    except ImportError:
+        pass
 
 # Config
 SCOPES = ['https://www.googleapis.com/auth/drive']
@@ -75,6 +89,13 @@ SIRKET_PROJE_CONFIG = {
     ],
     "OZMEN": [
         "Manisa JES Satış Süreci Projesi",
+    ],
+    "İÇERİK ÜRETİM FİKİRLERİ": [
+        "YouTube Video Fikirleri",
+        "Blog Yazı Fikirleri",
+        "Sosyal Medya İçerikleri",
+        "Podcast Konuları",
+        "Newsletter Fikirleri",
     ],
 }
 
@@ -171,7 +192,7 @@ def clear_cache():
 
 def parse_frontmatter(content: str) -> tuple[dict, str]:
     """Frontmatter ve içeriği ayır"""
-    frontmatter = {"proje": None, "created": None, "pinned": False}
+    frontmatter = {"proje": None, "created": None, "pinned": False, "reminder": None, "reminder_time": "09:00"}
     body = content
 
     if content.startswith("---"):
@@ -188,22 +209,25 @@ def parse_frontmatter(content: str) -> tuple[dict, str]:
                     if key == "pinned":
                         frontmatter[key] = value.lower() == "true"
                     elif value.lower() in ("null", "none", ""):
-                        frontmatter[key] = None if key != "pinned" else False
+                        frontmatter[key] = None if key not in ("pinned",) else False
                     elif key in frontmatter:
                         frontmatter[key] = value
 
     return frontmatter, body
 
 
-def create_frontmatter(proje: str = None, pinned: bool = False) -> str:
+def create_frontmatter(proje: str = None, pinned: bool = False, reminder: str = None, reminder_time: str = "09:00") -> str:
     """Yeni frontmatter oluştur"""
     today = datetime.now().strftime("%Y-%m-%d")
     proje_str = f'"{proje}"' if proje else "null"
     pinned_str = "true" if pinned else "false"
+    reminder_str = f'"{reminder}"' if reminder else "null"
     return f"""---
 proje: {proje_str}
 created: {today}
 pinned: {pinned_str}
+reminder: {reminder_str}
+reminder_time: "{reminder_time}"
 ---"""
 
 
@@ -215,7 +239,7 @@ def parse_body(body: str, fallback_title: str = "") -> tuple[str, str]:
     return title, content
 
 
-def generate_summary(content: str, max_chars: int = 260, fallback: str | None = None) -> str:
+def generate_summary(content: str, max_chars: int = 260, fallback: str = None) -> str:
     """İçerikten özet üret, yoksa fallback'e dön."""
     if not content or not content.strip():
         return (fallback or "")[:max_chars].rstrip() if fallback else ""
@@ -255,6 +279,8 @@ def _fetch_file_content(service, file_info: dict) -> dict:
         "created": frontmatter.get("created"),
         "modified": file_info['modifiedTime'],
         "pinned": frontmatter.get("pinned", False),
+        "reminder": frontmatter.get("reminder"),
+        "reminder_time": frontmatter.get("reminder_time", "09:00"),
     }
 
 
@@ -366,13 +392,18 @@ def _invalidate_items_cache():
         _cache_ttl.pop(k, None)
 
 
-def save_file(title: str, content: str, folder_type: str, proje: str = None, file_id: str = None, pinned: bool = False):
+def save_file(title: str, content: str, folder_type: str, proje: str = None, file_id: str = None, pinned: bool = False, reminder: str = None, reminder_time: str = "09:00"):
     """Dosya kaydet veya güncelle"""
     service = get_drive_service()
     folder_ids = get_folder_ids()
 
     title = _sanitize_title(title)
-    frontmatter = create_frontmatter(proje, pinned)
+    is_new_task = folder_type == "gorevler" and file_id is None
+
+    # Görevler klasörüne eklenen öğeler otomatik olarak günlük hatırlatıcı alır
+    if folder_type == "gorevler" and reminder is None and file_id is None:
+        reminder = "daily"
+    frontmatter = create_frontmatter(proje, pinned, reminder, reminder_time)
     md_content = f"{frontmatter}\n\n# {title}\n\n{content}"
 
     media = MediaInMemoryUpload(md_content.encode('utf-8'), mimetype='text/markdown')
@@ -402,6 +433,16 @@ def save_file(title: str, content: str, folder_type: str, proje: str = None, fil
             supportsAllDrives=True
         ).execute()
         _invalidate_items_cache()
+
+        # Yeni görev oluşturulduğunda macOS Anımsatıcılar'a otomatik ekle
+        if is_new_task and _reminders_available:
+            try:
+                proje_info = f" [{proje}]" if proje else ""
+                reminder_title = f"{title}{proje_info}"
+                add_reminder_with_daily_recurrence(reminder_title, content or "", reminder_time)
+            except Exception:
+                pass  # Sessizce devam et
+
         return result.get('id')
 
 
@@ -409,6 +450,22 @@ def move_file(file_id: str, from_folder: str, to_folder: str):
     """Dosyayı klasörler arası taşı"""
     service = get_drive_service()
     folder_ids = get_folder_ids()
+
+    # Anımsatıcı işlemleri için dosya bilgilerini al
+    reminder_title = None
+    file_content = None
+    file_reminder_time = "09:00"
+
+    if _reminders_available and (from_folder == "gorevler" or to_folder == "gorevler"):
+        try:
+            frontmatter, title, content = get_file_parsed(file_id)
+            proje = frontmatter.get("proje")
+            proje_info = f" [{proje}]" if proje else ""
+            reminder_title = f"{title}{proje_info}"
+            file_content = content
+            file_reminder_time = frontmatter.get("reminder_time", "09:00")
+        except Exception:
+            pass
 
     service.files().update(
         fileId=file_id,
@@ -418,10 +475,35 @@ def move_file(file_id: str, from_folder: str, to_folder: str):
     ).execute()
     _invalidate_items_cache()
 
+    # Anımsatıcı işlemleri
+    if _reminders_available and reminder_title:
+        try:
+            if from_folder == "gorevler" and to_folder == "arsiv":
+                # Görev tamamlandı → Anımsatıcıyı tamamla
+                complete_reminder(reminder_title)
+            elif from_folder == "gorevler" and to_folder != "gorevler":
+                # Görevlerden çıktı → Anımsatıcıyı sil
+                delete_reminder(reminder_title)
+            elif to_folder == "gorevler" and from_folder != "gorevler":
+                # Görevlere taşındı → Yeni Anımsatıcı ekle
+                add_reminder_with_daily_recurrence(reminder_title, file_content or "", file_reminder_time)
+        except Exception:
+            pass
+
 
 def delete_file(file_id: str, folder_type: str):
     """Dosyayı çöp kutusuna taşı veya kalıcı sil"""
     service = get_drive_service()
+
+    # Görev siliniyorsa Anımsatıcıdan da sil
+    if folder_type == "gorevler" and _reminders_available:
+        try:
+            frontmatter, title, _ = get_file_parsed(file_id)
+            proje = frontmatter.get("proje")
+            proje_info = f" [{proje}]" if proje else ""
+            delete_reminder(f"{title}{proje_info}")
+        except Exception:
+            pass
 
     if folder_type == "cop_kutusu":
         service.files().delete(fileId=file_id, supportsAllDrives=True).execute()
@@ -442,14 +524,14 @@ def get_file_parsed(file_id: str) -> tuple[dict, str, str]:
 def update_proje(file_id: str, folder_type: str, proje: str):
     """Dosyanın projesini güncelle"""
     frontmatter, title, body_content = get_file_parsed(file_id)
-    save_file(title, body_content, folder_type, proje, file_id, frontmatter.get("pinned", False))
+    save_file(title, body_content, folder_type, proje, file_id, frontmatter.get("pinned", False), frontmatter.get("reminder"), frontmatter.get("reminder_time", "09:00"))
 
 
 def toggle_pin(file_id: str, folder_type: str) -> bool:
     """Dosyanın sabitleme durumunu değiştir, yeni durumu döndür"""
     frontmatter, title, body_content = get_file_parsed(file_id)
     new_pinned = not frontmatter.get("pinned", False)
-    save_file(title, body_content, folder_type, frontmatter.get("proje"), file_id, new_pinned)
+    save_file(title, body_content, folder_type, frontmatter.get("proje"), file_id, new_pinned, frontmatter.get("reminder"), frontmatter.get("reminder_time", "09:00"))
     return new_pinned
 
 
