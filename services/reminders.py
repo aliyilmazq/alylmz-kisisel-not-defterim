@@ -9,6 +9,19 @@ from datetime import datetime, timedelta
 # Varsayılan Anımsatıcılar listesi adı
 DEFAULT_LIST_NAME = "Kişisel Not Defterim Anımsatıcılar"
 
+# Proje bazlı liste eşleştirmesi
+PROJECT_LIST_MAPPING = {
+    "TYPEFULLY - LinkedIn - Makale Konuları": "LinkedIn - Makale Konuları",
+    "TYPEFULLY - X - Makale Konuları": "X - Makale Konuları",
+}
+
+
+def get_list_for_project(proje: str = None) -> str:
+    """Projeye göre uygun Anımsatıcılar listesini döndür"""
+    if proje and proje in PROJECT_LIST_MAPPING:
+        return PROJECT_LIST_MAPPING[proje]
+    return DEFAULT_LIST_NAME
+
 
 def _run_applescript(script: str) -> tuple[bool, str]:
     """AppleScript çalıştır"""

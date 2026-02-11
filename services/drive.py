@@ -20,7 +20,8 @@ if sys.platform == "darwin":
         from services.reminders import (
             add_reminder_with_daily_recurrence,
             complete_reminder,
-            delete_reminder
+            delete_reminder,
+            get_list_for_project
         )
         _reminders_available = True
     except ImportError:
