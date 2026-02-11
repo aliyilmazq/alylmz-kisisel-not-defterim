@@ -90,12 +90,9 @@ SIRKET_PROJE_CONFIG = {
     "OZMEN": [
         "Manisa JES Satış Süreci Projesi",
     ],
-    "İÇERİK ÜRETİM FİKİRLERİ": [
-        "YouTube Video Fikirleri",
-        "Blog Yazı Fikirleri",
-        "Sosyal Medya İçerikleri",
-        "Podcast Konuları",
-        "Newsletter Fikirleri",
+    "TYPEFULLY": [
+        "LinkedIn - Makale Konuları",
+        "X - Makale Konuları",
     ],
 }
 
